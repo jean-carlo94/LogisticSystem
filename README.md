@@ -1,11 +1,11 @@
-# AssisPrexTest API
+# LogisticSystem API
 
 API REST para gestión de productos construida con FastAPI, SQLAlchemy y PostgreSQL.
 
 ## Estructura del proyecto
 
 ```
-AssisPrexTest/
+LogisticSystem/
 ├── app/
 │   ├── main.py                  # Punto de entrada, lifespan, registro de rutas
 │   ├── core/
@@ -124,7 +124,7 @@ Cada petición recorre la cadena: el router recibe el servicio ya construido con
 ```bash
 # 1. Clonar el repositorio
 git clone <repo-url>
-cd AssisPrexTest
+cd LogisticSystem
 
 # 2. (Opcional) Editar variables de entorno
 # El archivo .env ya contiene valores por defecto funcionales.
@@ -153,7 +153,7 @@ docker compose down
 ```bash
 # 1. Clonar y crear entorno virtual
 git clone <repo-url>
-cd AssisPrexTest
+cd LogisticSystem
 python3 -m venv venv
 source venv/bin/activate
 
@@ -180,7 +180,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | `POSTGRES_DB` | `asisprex_db` | Nombre de la base de datos |
 | `SECRET_KEY` | `dev-secret-key...` | Clave secreta de la app |
 | `API_V1_STR` | `/api/v1` | Prefijo de la API |
-| `PROJECT_NAME` | `AssisPrexTest API` | Nombre del proyecto |
+| `PROJECT_NAME` | `LogisticSystem API` | Nombre del proyecto |
 | `APP_PORT` | `8000` | Puerto de la aplicación |
 
 > Al usar Docker Compose, `DATABASE_URL` se inyecta automáticamente apuntando al contenedor de PostgreSQL.  

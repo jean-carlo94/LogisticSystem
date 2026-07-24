@@ -34,7 +34,7 @@ app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to AssisPrexTest API"}
+    return {"message": "Welcome to Logistic System API"}
 
 
 @app.get("/health")
