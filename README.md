@@ -1,6 +1,6 @@
 # LogisticSystem API
 
-API REST con autenticación JWT, RBAC (roles/permisos), gestión de productos y auditoría global. FastAPI + SQLAlchemy 2.0 async + PostgreSQL + Alembic.
+API REST con autenticación JWT, RBAC (roles/permisos), gestión de productos con imágenes y códigos de barras, estanterías de bodega con validación de capacidad, y auditoría global. FastAPI + SQLAlchemy 2.0 async + PostgreSQL + Alembic.
 
 ## Arquitectura
 
@@ -16,7 +16,7 @@ Router (async) → Depends → Service (async) → Repository → Base (async CR
 | Model | `modules/{name}/model.py` | ORM + queries de clase (hereda de `Base`) |
 | Schema | `modules/{name}/schema.py` | Pydantic DTOs |
 
-**`Base`** (`app/core/database.py`) provee CRUD global: `get_id`, `get_all`, `create`, `save`, `update`, `delete`. Propaga property setters vía `setattr`.
+**`Base`** (`app/core/database.py`) provee CRUD global: `get_id`, `get_all`, `create`, `save`, `update`, `delete`. Propaga property setters vía `setattr`. Soporta filtros genéricos con type coercion e `ILIKE` para strings.
 
 **`BaseRepository`** (`app/core/repository.py`) ABC con `model: type[Base]`. Repositorios heredan CRUD base + agregan queries específicas.
 
@@ -24,25 +24,27 @@ Router (async) → Depends → Service (async) → Repository → Base (async CR
 
 ```
 app/
-├── main.py                   # FastAPI app, lifespan (seed), CORS, exception handler
-├── seed.json                 # Seed inicial de permisos y roles
+├── main.py                   # FastAPI app, lifespan (seed), CORS, StaticFiles, exception handler
+├── seed.json                 # Seed inicial de permisos, roles y admin default
 ├── core/
 │   ├── config.py             # pydantic-settings con @lru_cache
-│   ├── database.py           # async engine + AsyncSession + Base (CRUD global)
+│   ├── database.py           # async engine + AsyncSession + Base (CRUD + filtros)
 │   ├── security.py           # JWT + bcrypt + get_current_user + require_permission
 │   ├── audit.py              # AuditLogger inyectable (Pydantic/SQLAlchemy/dict)
-│   ├── pagination.py         # PaginatedResult + PaginatedResponse + PaginationParams
+│   ├── pagination.py         # PaginatedResult + PaginatedResponse + PaginationParams + FilterParams
+│   ├── storage.py            # StorageBackend ABC + LocalStorageBackend (S3 futuro)
 │   ├── permissions.py        # PermissionCode enum (constantes de permisos)
-│   ├── exceptions.py         # AppException + NotFound/Conflict/Forbidden/Unauthorized
+│   ├── exceptions.py         # AppException + NotFound/Conflict/Forbidden/Unauthorized/Validation
 │   ├── repository.py         # BaseRepository ABC
-│   └── seed.py               # Carga seed.json → DB (primer arranque)
+│   └── seed.py               # Carga seed.json → DB + admin default (primer arranque)
 ├── api/
 │   ├── dependencies.py       # get_audit_logger (dependencias compartidas)
 │   └── v1/api.py             # Registro de routers
 └── modules/
-    ├── products/             # CRUD productos + máquina de estados
+    ├── products/             # CRUD + state machine + imágenes + QR + barcode + dimensiones
+    ├── shelves/              # CRUD estanterías + asignación productos + validación capacidad
     ├── events/               # Auditoría genérica (solo lectura)
-    ├── users/                # Auth + perfil + admin CRUD usuarios
+    ├── users/                # Auth + perfil + imagen + admin CRUD usuarios
     └── roles/                # CRUD roles, permisos, asignaciones
 ```
 
@@ -67,6 +69,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhost:8000/redoc)
 
+**Admin default:** `admin@logistics.com` / `admin123` (super_admin con todos los permisos)
+
 ## Endpoints
 
 ### Auth
@@ -77,22 +81,40 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 | `POST` | `/api/v1/auth/login` | No | Login → JWT (24h) |
 | `GET` | `/api/v1/auth/me` | Sí | Perfil completo (roles + permisos) |
 | `PUT` | `/api/v1/auth/me` | Sí | Editar perfil propio |
+| `POST` | `/api/v1/auth/me/image` | Sí | Subir avatar |
+| `DELETE` | `/api/v1/auth/me/image` | Sí | Eliminar avatar |
 
 ### Productos
 
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
-| `GET` | `/api/v1/products/` | `products_read` | Listar (paginado) |
+| `GET` | `/api/v1/products/` | `products_read` | Listar (paginado + filtros) |
 | `GET` | `/api/v1/products/{id}` | `products_read` | Obtener |
 | `POST` | `/api/v1/products/` | `products_create` | Crear |
 | `PUT` | `/api/v1/products/{id}` | `products_update` | Actualizar |
 | `DELETE` | `/api/v1/products/{id}` | `products_delete` | Eliminar |
+| `POST` | `/api/v1/products/{id}/image` | `products_update` | Subir imagen |
+| `DELETE` | `/api/v1/products/{id}/image` | `products_update` | Eliminar imagen |
+| `GET` | `/api/v1/products/{id}/qr` | `products_read` | Datos QR (JSON) |
+
+### Estanterías
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/v1/shelves/` | `shelves_read` | Listar (paginado + filtros) |
+| `GET` | `/api/v1/shelves/{id}` | `shelves_read` | Detalle + items + peso actual |
+| `POST` | `/api/v1/shelves/` | `shelves_create` | Crear |
+| `PUT` | `/api/v1/shelves/{id}` | `shelves_update` | Actualizar |
+| `DELETE` | `/api/v1/shelves/{id}` | `shelves_delete` | Eliminar (debe estar vacía) |
+| `POST` | `/api/v1/shelves/{id}/items` | `shelves_update` | Asignar producto |
+| `PUT` | `/api/v1/shelves/{id}/items/{item_id}` | `shelves_update` | Cambiar cantidad |
+| `DELETE` | `/api/v1/shelves/{id}/items/{item_id}` | `shelves_update` | Desasignar producto |
 
 ### Eventos (auditoría)
 
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
-| `GET` | `/api/v1/events/` | `events_read` | Listar (paginado) |
+| `GET` | `/api/v1/events/` | `events_read` | Listar (paginado + filtros) |
 | `GET` | `/api/v1/events/{id}` | `events_read` | Obtener |
 | `GET` | `/api/v1/{entity_type}/{entity_id}/events/` | `events_read` | Eventos de entidad |
 
@@ -117,35 +139,55 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 | `GET` | `/api/v1/users/{id}` | `users_manage` | Obtener usuario |
 | `PUT` | `/api/v1/users/{id}` | `users_manage` | Editar usuario |
 | `DELETE` | `/api/v1/users/{id}` | `users_manage` | Eliminar usuario |
+| `POST` | `/api/v1/users/{id}/image` | `users_manage` | Subir imagen |
+| `DELETE` | `/api/v1/users/{id}/image` | `users_manage` | Eliminar imagen |
+| `GET` | `/api/v1/users/{id}/roles` | `users_manage` | Ver roles |
+| `POST` | `/api/v1/users/{id}/roles` | `users_manage` | Asignar rol |
+
+## Filtros genéricos
+
+Todas las rutas `GET /list` aceptan filtros como query params. El sistema convierte automáticamente el valor al tipo de la columna.
+
+| Tipo de columna | Comportamiento | Ejemplo |
+|-----------------|---------------|---------|
+| `String` / `Text` | `ILIKE %valor%` (case-insensitive, parcial) | `?name=tornillo` → "Tornillo M3" |
+| `Integer` | `==` exacto | `?stock=100` |
+| `Float` | `==` exacto | `?price=15.0` |
+| `Boolean` | `==` exacto | `?is_active=true` |
+| `Enum` | `==` exacto | `?state=ACTIVE` |
+
+Múltiples filtros se combinan con `AND`. Ejemplos:
+
+```
+GET /products/?state=ACTIVE&price=15.0
+GET /users/?is_active=true&first_name=admin
+GET /shelves/?aisle=A&row=1
+GET /events/?action=CREATE&entity_type=Product
+```
+
+Campos seriales documentados en Swagger: `barcode` (products), `email` (users), `code` (shelves), `name` (roles).
+
+Campos bloqueados: `hashed_password` en users (ignorado por seguridad).
 
 ## RBAC — Roles y Permisos
 
 **Tablas:** `permissions`, `roles`, `role_permissions` (n-m), `user_roles` (n-m, usuario con N roles).
 
 **Códigos** definidos en `app/core/permissions.py` (`PermissionCode` enum):
-`products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`
+`products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`
 
 **Seed inicial** (`app/seed.json` → `app/core/seed.py`):
 
 | Rol | Permisos |
 |-----|----------|
-| `Admin` | todos |
-| `Operator` | products_create, products_read, products_update |
-| `Viewer` | products_read |
+| `Admin` | todos (11 permisos) |
+| `Operator` | products_create, products_read, products_update, shelves_read, shelves_update |
+| `Viewer` | products_read, shelves_read |
 
 **`require_permission(code)`** (`app/core/security.py`) — dependencia inyectable:
 - `is_super_admin=True` → bypass total
 - Query: User → UserRole → RolePermission → Permission
 - Sin permiso → 403
-
-**Uso en rutas:**
-```python
-@router.post("/")
-async def create(
-    ...,
-    _perm = Depends(require_permission(PermissionCode.PRODUCTS_CREATE)),
-): ...
-```
 
 ## Auditoría global
 
@@ -158,6 +200,27 @@ await self.audit.log_status_change("Product", id, user_id, old, new)
 await self.audit.log_delete("Product", product.id, user_id, product)
 ```
 
+## Almacenamiento de imágenes
+
+Storage abstraction con adapter pattern (`app/core/storage.py`):
+
+- `StorageBackend(ABC)` — interfaz `upload` / `delete`
+- `LocalStorageBackend` — guarda en `static/uploads/` (nombrado: `{prefix}_{uuid}.{ext}`)
+- `S3StorageBackend` — futuro, configurable vía `STORAGE_BACKEND=s3`
+
+Imágenes se sirven vía `StaticFiles` montado en `/static`. Respuesta JSON incluye `image_url` computado (`/static/uploads/...`).
+
+Al eliminar un producto/usuario, su imagen se borra del disco automáticamente.
+
+## Validación de capacidad (estanterías)
+
+Al asignar un producto a una estantería se validan dos reglas:
+
+1. **Dimensiones:** cada dimensión del producto (`width_cm`, `height_cm`, `depth_cm`) debe ser ≤ la dimensión de la estantería. Solo si el valor de la estantería es > 0.
+2. **Peso:** Σ(producto.weight_kg × item.quantity) ≤ shelf.max_weight_kg. Solo si max_weight_kg > 0.
+
+Error → `400 Bad Request` con detalle de todas las validaciones fallidas.
+
 ## Modelos
 
 ### User
@@ -166,7 +229,7 @@ await self.audit.log_delete("Product", product.id, user_id, product)
 |-------|------|-------|
 | `id` | int | PK |
 | `email` | str(255) | único, indexado |
-| `hashed_password` | str(255) | bcrypt |
+| `hashed_password` | str(255) | bcrypt, bloqueado en filtros |
 | `first_name` | str\|null | |
 | `last_name` | str\|null | |
 | `phone` | str\|null | |
@@ -174,6 +237,7 @@ await self.audit.log_delete("Product", product.id, user_id, product)
 | `country` | str\|null | |
 | `is_active` | bool | default true |
 | `is_super_admin` | bool | bypass permisos, default false |
+| `image_path` | str(500)\|null | ruta relativa en storage |
 | `created_at` | datetime | server_default now() |
 | `updated_at` | datetime | onupdate now() |
 
@@ -187,17 +251,51 @@ await self.audit.log_delete("Product", product.id, user_id, product)
 | `price` | float | `round(2)`, gt=0 |
 | `stock` | int | `max(0)`, ge=0 |
 | `state` | enum | ACTIVE\|INACTIVE\|NO_STOCK\|DISCONTINUED |
+| `barcode` | str(128)\|null | único, indexado |
+| `image_path` | str(500)\|null | ruta relativa en storage |
+| `weight_kg` | float | `max(0)`, ge=0 |
+| `width_cm` | float | `max(0)`, ge=0 |
+| `height_cm` | float | `max(0)`, ge=0 |
+| `depth_cm` | float | `max(0)`, ge=0 |
 | `create_at` | datetime | server_default now() |
 | `update_at` | datetime | onupdate now() |
 
 Máquina de estados: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
+
+### Shelf
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `name` | str(100) | nombre descriptivo |
+| `code` | str(50) | único (ej: "A-01-03") |
+| `aisle` | str(20) | pasillo |
+| `row` | int | fila |
+| `level` | int | nivel |
+| `max_weight_kg` | float | capacidad peso (0=sin límite) |
+| `width_cm` | float | ancho (0=sin límite) |
+| `height_cm` | float | alto (0=sin límite) |
+| `depth_cm` | float | fondo (0=sin límite) |
+| `created_at` | datetime | server_default now() |
+| `updated_at` | datetime | onupdate now() |
+
+### ShelfItem (pivote n-m)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `shelf_id` | int | FK → shelves (CASCADE) |
+| `product_id` | int | FK → products (CASCADE) |
+| `quantity` | int | cantidad en esta estantería |
+
+UniqueConstraint: `(shelf_id, product_id)` — mismo producto no puede estar dos veces en la misma estantería.
 
 ### Event
 
 | Campo | Tipo | Notas |
 |-------|------|-------|
 | `id` | int | PK |
-| `entity_type` | str(100) | "Product", "User", ... |
+| `entity_type` | str(100) | "Product", "User", "Shelf", ... |
 | `entity_id` | int | |
 | `action` | enum | CREATE\|UPDATE\|DELETE\|STATUS_CHANGED |
 | `user_id` | int | FK users, indexado |
@@ -206,23 +304,15 @@ Máquina de estados: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 
 Índice compuesto: `(entity_type, entity_id)`.
 
-### Role
+### Role y Permission (sin cambios)
 
-| Campo | Tipo |
-|-------|------|
-| `id` | int PK |
-| `name` | str(100) único |
-| `description` | str\|null |
-| `created_at` | datetime |
-| `updated_at` | datetime |
-
-### Permission
-
-| Campo | Tipo |
-|-------|------|
-| `id` | int PK |
-| `code` | str(100) único |
-| `description` | str\|null |
+| Role | | Permission | |
+|------|-|------------|-|
+| `id` | int PK | `id` | int PK |
+| `name` | str(100) único | `code` | str(100) único |
+| `description` | str\|null | `description` | str\|null |
+| `created_at` | datetime | | |
+| `updated_at` | datetime | | |
 
 ## Variables de entorno
 
@@ -235,6 +325,13 @@ Máquina de estados: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `ACCESS_TOKEN_EXPIRE_HOURS` | `24` | Expiración JWT |
 | `CORS_ORIGINS` | `["*"]` | Orígenes CORS |
 | `APP_PORT` | `8000` | Puerto HTTP |
+| `STORAGE_BACKEND` | `local` | `local` o `s3` (futuro) |
+| `STORAGE_PATH` | `static/uploads` | Directorio base local |
+| `S3_BUCKET` | *(vacío)* | Bucket S3 |
+| `S3_REGION` | `us-east-1` | Región S3 |
+| `S3_ACCESS_KEY` | *(vacío)* | Access key S3 |
+| `S3_SECRET_KEY` | *(vacío)* | Secret key S3 |
+| `S3_ENDPOINT` | *(vacío)* | Endpoint S3 personalizado |
 
 ## Transacciones y Migraciones
 
@@ -243,7 +340,7 @@ Máquina de estados: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 
 ## Seed
 
-`app/seed.json` define permisos y roles iniciales. `app/core/seed.py` lo carga al primer arranque (si tabla permissions vacía). Para agregar permisos/roles: editar el JSON + `app/core/permissions.py`.
+`app/seed.json` define permisos y roles iniciales. `app/core/seed.py` lo carga y crea usuario admin default (`admin@logistics.com` / `admin123`, super_admin) al primer arranque. Para agregar permisos/roles: editar seed.json + `app/core/permissions.py`. El seed es idempotente (solo corre si tabla permissions vacía).
 
 ## Agregar nuevo módulo
 
@@ -259,4 +356,4 @@ app/modules/nuevo/
 └── deps.py           # get_nuevo_service(db=Depends(get_db))
 ```
 
-Registrar router en `app/api/v1/api.py`. Importar modelo en `alembic/env.py`. Para auditoría: `audit: AuditLogger = Depends(get_audit_logger)`.
+Registrar router en `app/api/v1/api.py`. Importar modelo en `alembic/env.py`. Si requiere filtros: heredar de `Base` (ya incluye `get_all` con `filters` param).

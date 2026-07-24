@@ -1,4 +1,5 @@
 {
+  "_version": "0.2.1",
   "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API.",
 
   "base_url": "http://localhost:8000/api/v1",
@@ -26,6 +27,122 @@
     }
   },
 
+  "filtros": {
+    "_resumen": "TODAS las propiedades de cualquier entidad son filtrables. Pasas cualquier query param y el sistema lo convierte al tipo correcto automáticamente.",
+    "comportamiento_por_tipo": {
+      "String": "ILIKE %valor% — case-insensitive, búsqueda parcial en cualquier parte del texto",
+      "Text": "ILIKE %valor% — igual que String",
+      "Integer": "== exacto — debe coincidir el número completo",
+      "Float": "== exacto — debe coincidir el número completo",
+      "Boolean": "== exacto — true|false (acepta: true/false, 1/0, yes/no)",
+      "Enum": "== exacto — debe coincidir el valor del enum (ej: ACTIVE)",
+      "DateTime": "no soportado como filtro"
+    },
+    "campos_bloqueados": {
+      "User.hashed_password": "ignorado, nunca filtra por seguridad"
+    },
+    "combinacion": "Múltiples filtros se combinan con AND. Parámetros page/size están reservados y no se usan como filtro.",
+    "propiedades_con_setter": "Campos como Product.name, Product.price, Product.stock usan @property. El sistema los resuelve automáticamente al atributo privado (_name, _price, _stock). El frontend usa siempre el nombre público.",
+
+    "documentados_en_swagger": "Los campos seriales (unique) aparecen como Query params visibles en /docs. El resto funciona igual aunque no se vean en Swagger."
+  },
+
+  "filtros_por_entidad": {
+    "products": {
+      "documentado_swagger": "barcode",
+      "todos_los_campos": {
+        "barcode": { "tipo": "string", "ejemplo": "?barcode=BAR-001" },
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=tornillo" },
+        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=acero" },
+        "price": { "tipo": "float (=)", "ejemplo": "?price=15.0" },
+        "stock": { "tipo": "int (=)", "ejemplo": "?stock=100" },
+        "state": { "tipo": "enum (=)", "ejemplo": "?state=ACTIVE" },
+        "weight_kg": { "tipo": "float (=)", "ejemplo": "?weight_kg=2" },
+        "width_cm": { "tipo": "float (=)", "ejemplo": "?width_cm=5" },
+        "height_cm": { "tipo": "float (=)", "ejemplo": "?height_cm=5" },
+        "depth_cm": { "tipo": "float (=)", "ejemplo": "?depth_cm=5" },
+        "image_path": { "tipo": "string (ILIKE)", "ejemplo": "?image_path=products/x.jpg" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+      },
+      "ejemplos_combinados": [
+        "GET /products/?state=ACTIVE&stock=100",
+        "GET /products/?name=tornillo&price=0.5",
+        "GET /products/?barcode=BAR-001",
+        "GET /products/?name=mart (encuentra 'Martillo grande')"
+      ]
+    },
+    "users": {
+      "documentado_swagger": "email",
+      "todos_los_campos": {
+        "email": { "tipo": "string (ILIKE)", "ejemplo": "?email=admin" },
+        "first_name": { "tipo": "string (ILIKE)", "ejemplo": "?first_name=Admin" },
+        "last_name": { "tipo": "string (ILIKE)", "ejemplo": "?last_name=Lopez" },
+        "phone": { "tipo": "string (ILIKE)", "ejemplo": "?phone=+569" },
+        "city": { "tipo": "string (ILIKE)", "ejemplo": "?city=Santiago" },
+        "country": { "tipo": "string (ILIKE)", "ejemplo": "?country=Chile" },
+        "is_active": { "tipo": "bool (=)", "ejemplo": "?is_active=true" },
+        "is_super_admin": { "tipo": "bool (=)", "ejemplo": "?is_super_admin=false" },
+        "image_path": { "tipo": "string (ILIKE)", "ejemplo": "?image_path=users/x.jpg" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "hashed_password": { "tipo": "BLOQUEADO — ignorado" }
+      },
+      "ejemplos_combinados": [
+        "GET /users/?is_active=true&country=Chile",
+        "GET /users/?email=admin@logistics.com",
+        "GET /users/?first_name=Admin&city=santiago (ILIKE encuentra 'Santiago')"
+      ]
+    },
+    "shelves": {
+      "documentado_swagger": "code",
+      "todos_los_campos": {
+        "code": { "tipo": "string (ILIKE)", "ejemplo": "?code=A-01" },
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=estante" },
+        "aisle": { "tipo": "string (ILIKE)", "ejemplo": "?aisle=A" },
+        "row": { "tipo": "int (=)", "ejemplo": "?row=1" },
+        "level": { "tipo": "int (=)", "ejemplo": "?level=3" },
+        "max_weight_kg": { "tipo": "float (=)", "ejemplo": "?max_weight_kg=200" },
+        "width_cm": { "tipo": "float (=)", "ejemplo": "?width_cm=100" },
+        "height_cm": { "tipo": "float (=)", "ejemplo": "?height_cm=50" },
+        "depth_cm": { "tipo": "float (=)", "ejemplo": "?depth_cm=40" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+      },
+      "ejemplos_combinados": [
+        "GET /shelves/?aisle=A&row=1",
+        "GET /shelves/?code=A-01-01",
+        "GET /shelves/?name=estante+principal (ILIKE)",
+        "GET /shelves/?level=3&max_weight_kg=200"
+      ]
+    },
+    "roles": {
+      "documentado_swagger": "name",
+      "todos_los_campos": {
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=admin" },
+        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=admin" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+      },
+      "ejemplos_combinados": [
+        "GET /roles/?name=Admin",
+        "GET /roles/?description=rol"
+      ]
+    },
+    "events": {
+      "documentado_swagger": "ninguno (solo page/size)",
+      "todos_los_campos": {
+        "entity_type": { "tipo": "string (ILIKE)", "ejemplo": "?entity_type=Product" },
+        "entity_id": { "tipo": "int (=)", "ejemplo": "?entity_id=1" },
+        "action": { "tipo": "enum (=)", "ejemplo": "?action=CREATE" },
+        "user_id": { "tipo": "int (=)", "ejemplo": "?user_id=1" },
+        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=creado" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+      },
+      "ejemplos_combinados": [
+        "GET /events/?action=CREATE&entity_type=Product",
+        "GET /events/?user_id=1",
+        "GET /events/?action=DELETE&entity_type=Product"
+      ]
+    }
+  },
+
   "endpoints": {
 
     "products": {
@@ -36,8 +153,8 @@
         "query": {
           "page": "int",
           "size": "int",
-          "state": "string (ACTIVE|INACTIVE|NO_STOCK|DISCONTINUED) — opcional",
-          "barcode": "string — opcional"
+          "barcode": "string — documentado en Swagger (único)",
+          "_cualquier_otro_campo": "ver sección 'filtros_por_entidad.products'"
         },
         "response_shape": {
           "id": "int",
@@ -59,7 +176,8 @@
         "frontend_notes": [
           "image_url se construye concatenando el base_url del server. Si es null, mostrar placeholder.",
           "Para mostrar imagen: <img src='{base_url}{image_url}' />. El path ya incluye /static/.",
-          "state es enum: ACTIVE (verde), INACTIVE (gris), NO_STOCK (rojo), DISCONTINUED (tachado)."
+          "state es enum: ACTIVE (verde), INACTIVE (gris), NO_STOCK (rojo), DISCONTINUED (tachado).",
+          "Para buscar: usa ?name=mart y encuentra 'Martillo' (ILIKE case-insensitive)."
         ]
       },
 
@@ -272,8 +390,8 @@
         "query": {
           "page": "int",
           "size": "int",
-          "is_active": "bool (true|false) — opcional",
-          "email": "string — opcional"
+          "email": "string — documentado en Swagger (único)",
+          "_cualquier_otro_campo": "ver sección 'filtros_por_entidad.users'"
         },
         "response_shape": {
           "id": "int",
@@ -289,7 +407,12 @@
           "image_url": "string|null",
           "created_at": "ISO8601",
           "updated_at": "ISO8601"
-        }
+        },
+        "frontend_notes": [
+          "Email usa ILIKE: ?email=admin encuentra admin@logistics.com",
+          "Nombres usan ILIKE: ?first_name=ad encuentra Admin",
+          "hashed_password está bloqueado, se ignora si se envía como filtro."
+        ]
       },
 
       "get_one": { "method": "GET", "path": "/users/{id}", "auth": "users_manage", "response_shape": "mismo que list.items[0]" },
@@ -349,7 +472,8 @@
         "query": {
           "page": "int",
           "size": "int",
-          "aisle": "string — opcional (filtra por pasillo, ej: 'A')"
+          "code": "string — documentado en Swagger (único)",
+          "_cualquier_otro_campo": "ver sección 'filtros_por_entidad.shelves'"
         },
         "response_shape": {
           "id": "int",
@@ -364,7 +488,11 @@
           "depth_cm": "float (fondo interno, 0=sin límite)",
           "created_at": "ISO8601",
           "updated_at": "ISO8601"
-        }
+        },
+        "frontend_notes": [
+          "String fields con ILIKE: ?name=estante encuentra 'Estante A-1'",
+          "Int/Float con exact match: ?row=1&level=3"
+        ]
       },
 
       "get_detail": {
@@ -503,6 +631,11 @@
   },
 
   "flujo_frontend_tipico": {
+    "buscar_producto_por_nombre_parcial": [
+      "1. Input de búsqueda en frontend: usuario escribe 'mart'",
+      "2. GET /products/?name=mart → devuelve 'Martillo grande' (ILIKE parcial)",
+      "3. Funciona con mayúsculas, minúsculas, substrings en cualquier posición"
+    ],
     "crear_producto_con_imagen": [
       "1. POST /products/ con datos básicos → obtienes product.id",
       "2. POST /products/{id}/image con FormData (campo 'file') → obtienes image_url",
