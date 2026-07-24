@@ -5,7 +5,8 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.modules.users.model import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schema import (
-    RoleInfo, TokenResponse, UserCreate, UserLogin, UserProfileUpdate, UserUpdate,
+    RoleInfo, TokenResponse, UserCreate, UserLogin, UserProfileResponse,
+    UserProfileUpdate, UserUpdate,
 )
 
 
@@ -62,25 +63,25 @@ class UserService:
             raise NotFoundException("Rol no encontrado")
         await self.repo.assign_role(user_id, role_id)
 
-    async def get_profile(self, user: User) -> dict:
+    async def get_profile(self, user: User) -> UserProfileResponse:
         roles = await self.repo.get_user_roles(user.id)
         permissions = await self.repo.get_user_permissions(user.id, user.is_super_admin)
 
-        return {
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "phone": user.phone,
-            "city": user.city,
-            "country": user.country,
-            "is_active": user.is_active,
-            "is_super_admin": user.is_super_admin,
-            "created_at": user.created_at,
-            "updated_at": user.updated_at,
-            "roles": [RoleInfo(id=r.id, name=r.name) for r in roles],
-            "permissions": permissions,
-        }
+        return UserProfileResponse(
+            id=user.id,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            phone=user.phone,
+            city=user.city,
+            country=user.country,
+            is_active=user.is_active,
+            is_super_admin=user.is_super_admin,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            roles=[RoleInfo(id=r.id, name=r.name) for r in roles],
+            permissions=permissions,
+        )
 
     async def update_profile(self, user: User, data: UserProfileUpdate) -> User:
         update_data = data.model_dump(exclude_unset=True)

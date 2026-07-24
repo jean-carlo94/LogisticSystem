@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Logistic System API"
     CORS_ORIGINS: list[str] = ["*"]
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW: int = 60
 
 
 @lru_cache()

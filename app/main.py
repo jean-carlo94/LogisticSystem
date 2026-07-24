@@ -1,3 +1,5 @@
+import time
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -7,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1.api import router as api_v1_router
 from app.core.config import settings
 from app.core.exceptions import AppException
+from app.core.rate_limit import rate_limit_middleware
 from app.core.seed import seed_defaults
 
 
@@ -34,6 +37,20 @@ app.add_middleware(
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    return await rate_limit_middleware(request, call_next)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    duration = time.time() - start
+    print(f"  {request.method:7} {request.url.path:40} → {response.status_code} ({duration:.3f}s)")
+    return response
 
 
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)

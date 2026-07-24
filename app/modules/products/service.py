@@ -36,10 +36,10 @@ class ProductService:
         requested_state = product_in.state if product_in.state is not None else product.state
         resolved_state = self._resolve_state(new_stock, requested_state)
 
-        if resolved_state != requested_state:
-            product_in.state = resolved_state
-
         update_data = product_in.model_dump(exclude_unset=True)
+        if "state" not in update_data or resolved_state != requested_state:
+            update_data["state"] = resolved_state
+
         await self.repo.update(product, **update_data)
 
         if product.state != old_state:
@@ -47,7 +47,7 @@ class ProductService:
                 "Product", product.id, user_id, old_state.value, product.state.value,
             )
 
-        await self.audit.log_update("Product", product.id, user_id, product_in)
+        await self.audit.log_update("Product", product.id, user_id, update_data)
         return product
 
     def _resolve_state(self, stock: int, state: ProductState) -> ProductState:
