@@ -12,9 +12,9 @@ class RoleService:
         self.perm_repo = perm_repo
         self.user_role_repo = user_role_repo
 
-    async def get_all(self, page: int = 1, size: int = 20) -> PaginatedResult[Role]:
+    async def get_all(self, page: int = 1, size: int = 20, filters: dict | None = None) -> PaginatedResult[Role]:
         skip = (page - 1) * size
-        items, total = await self.role_repo.get_all(skip=skip, limit=size)
+        items, total = await self.role_repo.get_all(skip=skip, limit=size, filters=filters)
         return PaginatedResult.of(list(items), total, page, size)
 
     async def create(self, data: RoleCreate) -> Role:

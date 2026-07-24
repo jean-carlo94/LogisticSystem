@@ -11,8 +11,8 @@ class BaseRepository(ABC):
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_all(self, skip: int = 0, limit: int = 100):
-        return await self.model.get_all(self.db, skip=skip, limit=limit)
+    async def get_all(self, skip: int = 0, limit: int = 100, filters: dict | None = None):
+        return await self.model.get_all(self.db, skip=skip, limit=limit, filters=filters)
 
     async def get_by_id(self, entity_id: int):
         return await self.model.get_id(self.db, entity_id)

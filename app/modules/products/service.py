@@ -1,10 +1,13 @@
+from fastapi import UploadFile
+
 from app.core.audit import AuditLogger
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResult
+from app.core.storage import generate_filename, get_storage
 from app.modules.products.enums import ProductState
 from app.modules.products.model import Product
 from app.modules.products.repository import ProductRepository
-from app.modules.products.schema import ProductCreate, ProductUpdate
+from app.modules.products.schema import ProductCreate, ProductQRResponse, ProductUpdate, ShelfInfo
 
 
 class ProductService:
@@ -12,15 +15,22 @@ class ProductService:
         self.repo = repo
         self.audit = audit
 
-    async def get_all(self, page: int = 1, size: int = 20) -> PaginatedResult[Product]:
+    async def get_all(
+        self, page: int = 1, size: int = 20, filters: dict | None = None
+    ) -> PaginatedResult[Product]:
         skip = (page - 1) * size
-        items, total = await self.repo.get_all(skip=skip, limit=size)
+        items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
         return PaginatedResult.of(list(items), total, page, size)
 
     async def get_by_id(self, product_id: int) -> Product | None:
         return await self.repo.get_by_id(product_id)
 
     async def create(self, product_in: ProductCreate, user_id: int) -> Product:
+        if product_in.barcode:
+            existing = await self.repo.find_by_barcode(product_in.barcode)
+            if existing:
+                raise ConflictException("El código de barras ya está en uso")
+
         product_in.state = self._resolve_state(product_in.stock, product_in.state)
         product = await self.repo.create(**product_in.model_dump())
         await self.audit.log_create("Product", product.id, user_id, product)
@@ -31,12 +41,19 @@ class ProductService:
         if not product:
             raise NotFoundException("Producto no encontrado")
 
+        update_data = product_in.model_dump(exclude_unset=True)
+
+        if "barcode" in update_data and update_data["barcode"] != product.barcode:
+            if update_data["barcode"]:
+                existing = await self.repo.find_by_barcode(update_data["barcode"])
+                if existing and existing.id != product_id:
+                    raise ConflictException("El código de barras ya está en uso")
+
         old_state = product.state
-        new_stock = product_in.stock if product_in.stock is not None else product.stock
-        requested_state = product_in.state if product_in.state is not None else product.state
+        new_stock = update_data.get("stock", product.stock)
+        requested_state = update_data.get("state", product.state)
         resolved_state = self._resolve_state(new_stock, requested_state)
 
-        update_data = product_in.model_dump(exclude_unset=True)
         if "state" not in update_data or resolved_state != requested_state:
             update_data["state"] = resolved_state
 
@@ -62,5 +79,60 @@ class ProductService:
         if not product:
             raise NotFoundException("Producto no encontrado")
 
+        if product.image_path:
+            storage = get_storage()
+            await storage.delete(product.image_path)
+
         await self.audit.log_delete("Product", product.id, user_id, product)
         await self.repo.delete(product)
+
+    async def upload_image(self, product_id: int, file: UploadFile, user_id: int) -> Product:
+        product = await self.repo.get_by_id(product_id)
+        if not product:
+            raise NotFoundException("Producto no encontrado")
+
+        storage = get_storage()
+        if product.image_path:
+            await storage.delete(product.image_path)
+
+        filename = generate_filename(f"product_{product_id}", file.filename or "image.jpg")
+        relative_path = f"products/{filename}"
+        await storage.upload(file, relative_path)
+
+        await self.repo.update(product, image_path=relative_path)
+        await self.audit.log_update("Product", product.id, user_id, {"image_path": relative_path})
+        return product
+
+    async def delete_image(self, product_id: int, user_id: int) -> None:
+        product = await self.repo.get_by_id(product_id)
+        if not product:
+            raise NotFoundException("Producto no encontrado")
+
+        if product.image_path:
+            storage = get_storage()
+            await storage.delete(product.image_path)
+            await self.repo.update(product, image_path=None)
+            await self.audit.log_update("Product", product.id, user_id, {"image_path": None})
+
+    async def get_qr_data(self, product_id: int) -> ProductQRResponse:
+        product = await self.repo.get_by_id(product_id)
+        if not product:
+            raise NotFoundException("Producto no encontrado")
+
+        shelf = None
+        items = await self.repo.get_product_shelves(product_id)
+        if items:
+            first = items[0]
+            shelf = ShelfInfo(
+                code=first.code,
+                aisle=first.aisle,
+                row=first.row,
+                level=first.level,
+            )
+
+        return ProductQRResponse(
+            product_id=product.id,
+            name=product.name,
+            barcode=product.barcode,
+            shelf=shelf,
+        )

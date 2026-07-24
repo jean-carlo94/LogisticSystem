@@ -1,0 +1,550 @@
+{
+  "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API.",
+
+  "base_url": "http://localhost:8000/api/v1",
+  "auth_header": "Authorization: Bearer {token}",
+  "content_type": "application/json",
+  "content_type_upload": "multipart/form-data",
+
+  "respuestas_de_error": {
+    "400": { "detail": "string — mensaje de validación" },
+    "401": { "detail": "No autorizado" },
+    "403": { "detail": "Acceso denegado" },
+    "404": { "detail": "Recurso no encontrado" },
+    "409": { "detail": "string — conflicto (duplicado, restricción)" },
+    "422": "FastAPI validation error (campos inválidos)"
+  },
+
+  "paginacion": {
+    "request_query": { "page": "int (default 1)", "size": "int (default 20, max 100)" },
+    "response_shape": {
+      "items": "list<T>",
+      "total": "int",
+      "page": "int",
+      "size": "int",
+      "pages": "int"
+    }
+  },
+
+  "endpoints": {
+
+    "products": {
+      "list": {
+        "method": "GET",
+        "path": "/products/",
+        "auth": "products_read",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "state": "string (ACTIVE|INACTIVE|NO_STOCK|DISCONTINUED) — opcional",
+          "barcode": "string — opcional"
+        },
+        "response_shape": {
+          "id": "int",
+          "name": "string",
+          "description": "string|null",
+          "price": "float",
+          "stock": "int",
+          "state": "string",
+          "barcode": "string|null",
+          "weight_kg": "float",
+          "width_cm": "float",
+          "height_cm": "float",
+          "depth_cm": "float",
+          "image_path": "string|null",
+          "image_url": "string|null (ej: /static/uploads/products/product_5_abc.jpg)",
+          "create_at": "ISO8601 datetime",
+          "update_at": "ISO8601 datetime"
+        },
+        "frontend_notes": [
+          "image_url se construye concatenando el base_url del server. Si es null, mostrar placeholder.",
+          "Para mostrar imagen: <img src='{base_url}{image_url}' />. El path ya incluye /static/.",
+          "state es enum: ACTIVE (verde), INACTIVE (gris), NO_STOCK (rojo), DISCONTINUED (tachado)."
+        ]
+      },
+
+      "get_one": {
+        "method": "GET",
+        "path": "/products/{id}",
+        "auth": "products_read",
+        "response_shape": "mismo que list.items[0]"
+      },
+
+      "create": {
+        "method": "POST",
+        "path": "/products/",
+        "auth": "products_create",
+        "request_body": {
+          "name": "string (1-200 chars, requerido)",
+          "description": "string|null (opcional)",
+          "price": "float (>0, requerido)",
+          "stock": "int (>=0, default 0)",
+          "state": "string (ACTIVE|INACTIVE|NO_STOCK|DISCONTINUED, default ACTIVE)",
+          "barcode": "string|null (max 128, único)",
+          "weight_kg": "float (>=0, default 0)",
+          "width_cm": "float (>=0, default 0)",
+          "height_cm": "float (>=0, default 0)",
+          "depth_cm": "float (>=0, default 0)"
+        },
+        "response_shape": "mismo que list.items[0] (201 Created)",
+        "errores": {
+          "409": "Si barcode ya existe: 'El código de barras ya está en uso'"
+        },
+        "frontend_notes": [
+          "stock=0 fuerza estado a NO_STOCK sin importar lo que envíes.",
+          "barcode es único pero puede ser null (varios productos sin barcode OK).",
+          "weight/dimensions son para validación de estantería luego."
+        ]
+      },
+
+      "update": {
+        "method": "PUT",
+        "path": "/products/{id}",
+        "auth": "products_update",
+        "request_body": "Todos los campos de create PERO todos son opcionales (partial update). Solo envía los campos que cambian.",
+        "response_shape": "mismo que list.items[0]"
+      },
+
+      "delete": {
+        "method": "DELETE",
+        "path": "/products/{id}",
+        "auth": "products_delete",
+        "response": "204 No Content"
+      },
+
+      "upload_image": {
+        "method": "POST",
+        "path": "/products/{id}/image",
+        "auth": "products_update",
+        "content_type": "multipart/form-data",
+        "request_body": { "file": "binary (campo del form llamado 'file')" },
+        "response_shape": "mismo que product (con image_url actualizado)",
+        "frontend_notes": [
+          "Usa FormData: form.append('file', fileObject)",
+          "Reemplaza imagen anterior automáticamente.",
+          "La URL nueva viene en image_url del response."
+        ]
+      },
+
+      "delete_image": {
+        "method": "DELETE",
+        "path": "/products/{id}/image",
+        "auth": "products_update",
+        "response": "204 No Content"
+      },
+
+      "qr": {
+        "method": "GET",
+        "path": "/products/{id}/qr",
+        "auth": "products_read",
+        "response_shape": {
+          "product_id": "int",
+          "name": "string",
+          "barcode": "string|null",
+          "shelf": {
+            "code": "string (ej: A-01-03)",
+            "aisle": "string (ej: A)",
+            "row": "int (ej: 1)",
+            "level": "int (ej: 3)"
+          }
+        },
+        "frontend_notes": [
+          "Usa esta data para renderizar un QR code en el frontend (librería qrcode.js o similar).",
+          "shelf es null si el producto no está en ninguna estantería.",
+          "Contenido típico del QR: JSON.stringify(response)."
+        ]
+      }
+    },
+
+    "users_auth": {
+      "register": {
+        "method": "POST",
+        "path": "/auth/register",
+        "auth": "público",
+        "request_body": {
+          "email": "string (email válido)",
+          "password": "string (6-128 chars)",
+          "first_name": "string|null",
+          "last_name": "string|null",
+          "phone": "string|null",
+          "city": "string|null",
+          "country": "string|null"
+        },
+        "response_shape": {
+          "id": "int",
+          "email": "string",
+          "first_name": "string|null",
+          "last_name": "string|null",
+          "phone": "string|null",
+          "city": "string|null",
+          "country": "string|null",
+          "is_active": "bool",
+          "image_path": "string|null",
+          "image_url": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "errores": { "409": "El email ya esta registrado" }
+      },
+
+      "login": {
+        "method": "POST",
+        "path": "/auth/login",
+        "auth": "público",
+        "request_body": {
+          "email": "string (email válido)",
+          "password": "string"
+        },
+        "response_shape": {
+          "access_token": "string (JWT)",
+          "token_type": "bearer"
+        },
+        "errores": { "401": "Email o contrasena incorrectos", "403": "Usuario inactivo" }
+      },
+
+      "me": {
+        "method": "GET",
+        "path": "/auth/me",
+        "auth": "token requerido (cualquier usuario)",
+        "response_shape": {
+          "id": "int",
+          "email": "string",
+          "first_name": "string|null",
+          "last_name": "string|null",
+          "phone": "string|null",
+          "city": "string|null",
+          "country": "string|null",
+          "is_active": "bool",
+          "is_super_admin": "bool",
+          "image_path": "string|null",
+          "image_url": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601",
+          "roles": [{"id": "int", "name": "string"}],
+          "permissions": ["string (ej: products_read)"]
+        },
+        "frontend_notes": [
+          "Usa permissions para mostrar/ocultar botones y rutas en el frontend.",
+          "is_super_admin=true → tiene todos los permisos implícitamente.",
+          "roles es lista de roles asignados (nombres tipo Admin, Operator, Viewer)."
+        ]
+      },
+
+      "update_me": {
+        "method": "PUT",
+        "path": "/auth/me",
+        "auth": "token requerido",
+        "request_body": {
+          "first_name": "string|null (opcional)",
+          "last_name": "string|null (opcional)",
+          "phone": "string|null (opcional)",
+          "city": "string|null (opcional)",
+          "country": "string|null (opcional)",
+          "password": "string (6-128, opcional. Si se envía, cambia la contraseña)"
+        },
+        "response_shape": "mismo que login response (sin token)"
+      },
+
+      "upload_avatar": {
+        "method": "POST",
+        "path": "/auth/me/image",
+        "auth": "token requerido",
+        "content_type": "multipart/form-data",
+        "request_body": { "file": "binary" },
+        "response_shape": "mismo que user"
+      },
+
+      "delete_avatar": {
+        "method": "DELETE",
+        "path": "/auth/me/image",
+        "auth": "token requerido",
+        "response": "204 No Content"
+      }
+    },
+
+    "users_admin": {
+      "_nota": "Solo usuarios con permiso users_manage o super_admin",
+
+      "list": {
+        "method": "GET",
+        "path": "/users/",
+        "auth": "users_manage",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "is_active": "bool (true|false) — opcional",
+          "email": "string — opcional"
+        },
+        "response_shape": {
+          "id": "int",
+          "email": "string",
+          "first_name": "string|null",
+          "last_name": "string|null",
+          "phone": "string|null",
+          "city": "string|null",
+          "country": "string|null",
+          "is_active": "bool",
+          "is_super_admin": "bool",
+          "image_path": "string|null",
+          "image_url": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        }
+      },
+
+      "get_one": { "method": "GET", "path": "/users/{id}", "auth": "users_manage", "response_shape": "mismo que list.items[0]" },
+
+      "update": {
+        "method": "PUT",
+        "path": "/users/{id}",
+        "auth": "users_manage",
+        "request_body": {
+          "email": "string|null",
+          "password": "string|null (6-128)",
+          "first_name": "string|null",
+          "last_name": "string|null",
+          "phone": "string|null",
+          "city": "string|null",
+          "country": "string|null",
+          "is_active": "bool|null"
+        },
+        "errores": { "409": "El email ya esta en uso" }
+      },
+
+      "delete": { "method": "DELETE", "path": "/users/{id}", "auth": "users_manage", "response": "204 No Content" },
+
+      "upload_image": {
+        "method": "POST",
+        "path": "/users/{id}/image",
+        "auth": "users_manage",
+        "content_type": "multipart/form-data",
+        "request_body": { "file": "binary" }
+      },
+
+      "delete_image": { "method": "DELETE", "path": "/users/{id}/image", "auth": "users_manage", "response": "204 No Content" },
+
+      "get_roles": {
+        "method": "GET",
+        "path": "/users/{id}/roles",
+        "auth": "users_manage",
+        "response_shape": [{"id": "int", "name": "string"}]
+      },
+
+      "assign_role": {
+        "method": "POST",
+        "path": "/users/{id}/roles",
+        "auth": "users_manage",
+        "request_body": { "role_id": "int" },
+        "response": "204 No Content"
+      }
+    },
+
+    "shelves": {
+      "_intro": "Las estanterías organizan los productos en la bodega. Cada producto puede estar en múltiples estanterías con cantidades parciales. El sistema valida que el producto quepa (dimensiones) y no exceda el peso máximo.",
+
+      "list": {
+        "method": "GET",
+        "path": "/shelves/",
+        "auth": "shelves_read",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "aisle": "string — opcional (filtra por pasillo, ej: 'A')"
+        },
+        "response_shape": {
+          "id": "int",
+          "name": "string (nombre descriptivo)",
+          "code": "string (código único, ej: A-01-03)",
+          "aisle": "string (pasillo, ej: A)",
+          "row": "int (fila)",
+          "level": "int (nivel/altura)",
+          "max_weight_kg": "float (capacidad máxima de peso, 0=sin límite)",
+          "width_cm": "float (ancho interno, 0=sin límite)",
+          "height_cm": "float (alto interno, 0=sin límite)",
+          "depth_cm": "float (fondo interno, 0=sin límite)",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        }
+      },
+
+      "get_detail": {
+        "method": "GET",
+        "path": "/shelves/{id}",
+        "auth": "shelves_read",
+        "response_shape": {
+          "id": "int",
+          "name": "string",
+          "code": "string",
+          "aisle": "string",
+          "row": "int",
+          "level": "int",
+          "max_weight_kg": "float",
+          "width_cm": "float",
+          "height_cm": "float",
+          "depth_cm": "float",
+          "current_weight_kg": "float (peso total de productos asignados)",
+          "items": [
+            {
+              "id": "int (ID del shelf_item)",
+              "shelf_id": "int",
+              "product_id": "int",
+              "product_name": "string",
+              "quantity": "int"
+            }
+          ],
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "current_weight_kg es la suma de (producto.weight_kg × item.quantity) para todos los items.",
+          "items[] son los productos asignados a esta estantería con sus cantidades.",
+          "Usa product_id para navegar al detalle del producto. product_name es solo para display."
+        ]
+      },
+
+      "create": {
+        "method": "POST",
+        "path": "/shelves/",
+        "auth": "shelves_create",
+        "request_body": {
+          "name": "string (1-100, requerido, ej: 'Estante A-1')",
+          "code": "string (1-50, requerido, único, ej: 'A-01-03')",
+          "aisle": "string (max 20, default '', ej: 'A')",
+          "row": "int (>=0, default 0, ej: 1)",
+          "level": "int (>=0, default 0, ej: 3)",
+          "max_weight_kg": "float (>=0, default 0, ej: 200.0)",
+          "width_cm": "float (>=0, default 0, ej: 100.0)",
+          "height_cm": "float (>=0, default 0, ej: 50.0)",
+          "depth_cm": "float (>=0, default 0, ej: 40.0)"
+        },
+        "response_shape": "mismo que list.items[0] (201 Created)",
+        "errores": { "409": "El código de estantería ya existe" },
+        "frontend_notes": [
+          "code es como un SKU de la estantería — debe ser único. Define tu propio esquema (ej: PASILLO-FILA-NIVEL).",
+          "Si max_weight_kg=0 o dimensiones en 0, esa validación se omite al asignar productos."
+        ]
+      },
+
+      "update": {
+        "method": "PUT",
+        "path": "/shelves/{id}",
+        "auth": "shelves_update",
+        "request_body": "Todos los campos de create PERO opcionales (partial update).",
+        "response_shape": "mismo que list.items[0]"
+      },
+
+      "delete": {
+        "method": "DELETE",
+        "path": "/shelves/{id}",
+        "auth": "shelves_delete",
+        "response": "204 No Content",
+        "errores": {
+          "409": "No se puede eliminar una estantería con productos asignados"
+        },
+        "frontend_notes": [
+          "Antes de eliminar, debes vaciar la estantería (desasignar todos los items).",
+          "Sugerencia UX: mostrar confirmación 'Esta estantería tiene X productos. ¿Moverlos primero?'"
+        ]
+      },
+
+      "add_item": {
+        "method": "POST",
+        "path": "/shelves/{shelf_id}/items",
+        "auth": "shelves_update",
+        "request_body": {
+          "product_id": "int (requerido)",
+          "quantity": "int (>=1, default 1)"
+        },
+        "response_shape": {
+          "id": "int",
+          "shelf_id": "int",
+          "product_id": "int",
+          "product_name": "string (vacío en creación, se llena en GET detail)",
+          "quantity": "int"
+        },
+        "errores": {
+          "404": "Estantería o producto no encontrado",
+          "409": "El producto ya está asignado a esta estantería",
+          "400": "Error de capacidad: 'Ancho del producto (50cm) excede el de la estantería (40cm); Peso total (210kg) excede la capacidad máxima (200kg)'"
+        },
+        "frontend_notes": [
+          "La validación de capacidad ocurre ANTES de guardar. Si falla, el item no se crea.",
+          "Un producto puede estar en múltiples estanterías (ej: 10 unidades en A-01, 5 en B-03).",
+          "Si necesitas más cantidad del mismo producto en la misma estantería, usa PUT item."
+        ]
+      },
+
+      "update_item": {
+        "method": "PUT",
+        "path": "/shelves/{shelf_id}/items/{item_id}",
+        "auth": "shelves_update",
+        "request_body": {
+          "quantity": "int (>=0)"
+        },
+        "response_shape": "mismo que ShelfItemResponse",
+        "frontend_notes": [
+          "Si quantity=0, el item se elimina (mismo efecto que DELETE).",
+          "La validación de capacidad se ejecuta con la NUEVA cantidad.",
+          "Para incrementar/decrementar stock, calcula nuevo quantity y haz PUT."
+        ]
+      },
+
+      "remove_item": {
+        "method": "DELETE",
+        "path": "/shelves/{shelf_id}/items/{item_id}",
+        "auth": "shelves_update",
+        "response": "204 No Content",
+        "frontend_notes": [
+          "Desasigna completamente el producto de la estantería.",
+          "Alternativa: PUT item con quantity=0 hace lo mismo."
+        ]
+      }
+    }
+  },
+
+  "flujo_frontend_tipico": {
+    "crear_producto_con_imagen": [
+      "1. POST /products/ con datos básicos → obtienes product.id",
+      "2. POST /products/{id}/image con FormData (campo 'file') → obtienes image_url",
+      "3. Mostrar imagen: <img src='{base_url}{image_url}' />"
+    ],
+    "asignar_producto_a_estanteria": [
+      "1. GET /shelves/ para elegir estantería destino",
+      "2. POST /shelves/{id}/items con {product_id, quantity}",
+      "3. Si 400 → mostrar errores de capacidad al usuario",
+      "4. Si 201 → el producto ya está en la estantería"
+    ],
+    "escanear_qr_para_ubicar_producto": [
+      "1. GET /products/{id}/qr → obtienes JSON con shelf info",
+      "2. Renderizas QR code con ese JSON en el frontend",
+      "3. Al escanear: muestras aisle, row, level (ej: 'Pasillo A, Fila 1, Nivel 3')"
+    ],
+    "dashboard_estanteria": [
+      "1. GET /shelves/{id} → obtienes items + current_weight_kg",
+      "2. Muestras barra de capacidad: current_weight / max_weight",
+      "3. Lista de items cliqueables → navegan a GET /products/{product_id}"
+    ]
+  },
+
+  "permisos_frontend": {
+    "_como_usar": "Decodificar JWT en frontend. El endpoint GET /auth/me devuelve la lista de permisos del usuario.",
+    "mapeo_rutas": {
+      "products_create": "mostrar botón 'Nuevo Producto'",
+      "products_read": "mostrar lista de productos, ver detalle",
+      "products_update": "mostrar botón 'Editar', subir/bajar imagen",
+      "products_delete": "mostrar botón 'Eliminar'",
+      "shelves_create": "mostrar botón 'Nueva Estantería'",
+      "shelves_read": "mostrar lista de estanterías, ver detalle",
+      "shelves_update": "mostrar botón 'Editar', asignar/quitar productos",
+      "shelves_delete": "mostrar botón 'Eliminar estantería'",
+      "users_manage": "mostrar sección Admin → Usuarios",
+      "roles_manage": "mostrar sección Admin → Roles",
+      "events_read": "mostrar sección Auditoría"
+    },
+    "roles_default": {
+      "Admin": "todos los permisos",
+      "Operator": "products_create, products_read, products_update, shelves_read, shelves_update",
+      "Viewer": "products_read, shelves_read"
+    }
+  }
+}

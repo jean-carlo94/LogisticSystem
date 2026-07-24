@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class UserCreate(BaseModel):
@@ -27,10 +27,18 @@ class UserResponse(BaseModel):
     city: str | None = None
     country: str | None = None
     is_active: bool
+    image_path: str | None = None
+    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def set_image_url(self) -> "UserResponse":
+        if self.image_path:
+            self.image_url = f"/static/{self.image_path}"
+        return self
 
 
 class TokenResponse(BaseModel):
@@ -59,10 +67,18 @@ class UserAdminResponse(BaseModel):
     country: str | None = None
     is_active: bool
     is_super_admin: bool
+    image_path: str | None = None
+    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def set_image_url(self) -> "UserAdminResponse":
+        if self.image_path:
+            self.image_url = f"/static/{self.image_path}"
+        return self
 
 
 class RoleInfo(BaseModel):
@@ -80,12 +96,20 @@ class UserProfileResponse(BaseModel):
     country: str | None = None
     is_active: bool
     is_super_admin: bool
+    image_path: str | None = None
+    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
     roles: list[RoleInfo] = []
     permissions: list[str] = []
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def set_image_url(self) -> "UserProfileResponse":
+        if self.image_path:
+            self.image_url = f"/static/{self.image_path}"
+        return self
 
 
 class UserProfileUpdate(BaseModel):

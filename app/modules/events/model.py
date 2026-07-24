@@ -11,6 +11,7 @@ from app.modules.events.enums import ActionType
 
 class Event(Base):
     __tablename__ = "events"
+    __created_at_attr__ = "create_at"
     __table_args__ = (
         Index("ix_events_entity_type_id", "entity_type", "entity_id"),
     )

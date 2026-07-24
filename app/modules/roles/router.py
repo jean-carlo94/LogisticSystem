@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
-from app.core.pagination import PaginatedResponse
+from app.core.pagination import FilterParams, PaginatedResponse
 from app.core.security import get_current_user, require_permission
 from app.modules.roles.deps import get_role_service
 from app.modules.roles.schema import (
@@ -30,10 +30,15 @@ async def list_permissions(
 
 @router.get("/", response_model=PaginatedResponse[RoleResponse])
 async def list_roles(
+    name: str | None = Query(default=None, description="Nombre del rol (único)"),
+    filters: dict = FilterParams,
     service: RoleService = Depends(get_role_service),
     _user: "User" = Depends(get_current_user),
 ):
-    return await service.get_all()
+    merged = dict(filters)
+    if name is not None:
+        merged["name"] = name
+    return await service.get_all(filters=merged or None)
 
 
 @router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)

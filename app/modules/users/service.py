@@ -1,7 +1,10 @@
+from fastapi import UploadFile
+
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
 from app.core.pagination import PaginatedResult
 from app.core.security import create_access_token, hash_password, verify_password
+from app.core.storage import generate_filename, get_storage
 from app.modules.users.model import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schema import (
@@ -39,9 +42,11 @@ class UserService:
             raise ForbiddenException("Usuario inactivo")
         return TokenResponse(access_token=create_access_token(user.id))
 
-    async def get_all(self, page: int = 1, size: int = 20) -> PaginatedResult[User]:
+    async def get_all(
+        self, page: int = 1, size: int = 20, filters: dict | None = None
+    ) -> PaginatedResult[User]:
         skip = (page - 1) * size
-        items, total = await self.repo.get_all(skip=skip, limit=size)
+        items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
         return PaginatedResult.of(list(items), total, page, size)
 
     async def get_by_id(self, user_id: int) -> User:
@@ -77,6 +82,7 @@ class UserService:
             country=user.country,
             is_active=user.is_active,
             is_super_admin=user.is_super_admin,
+            image_path=user.image_path,
             created_at=user.created_at,
             updated_at=user.updated_at,
             roles=[RoleInfo(id=r.id, name=r.name) for r in roles],
@@ -115,5 +121,37 @@ class UserService:
         if not user:
             raise NotFoundException("Usuario no encontrado")
 
+        if user.image_path:
+            storage = get_storage()
+            await storage.delete(user.image_path)
+
         await self.audit.log_delete("User", user.id, admin_user.id, user)
         await self.repo.delete(user)
+
+    async def upload_image(self, user_id: int, file: UploadFile, actor_id: int) -> User:
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            raise NotFoundException("Usuario no encontrado")
+
+        storage = get_storage()
+        if user.image_path:
+            await storage.delete(user.image_path)
+
+        filename = generate_filename(f"user_{user_id}", file.filename or "avatar.jpg")
+        relative_path = f"users/{filename}"
+        await storage.upload(file, relative_path)
+
+        await self.repo.update(user, image_path=relative_path)
+        await self.audit.log_update("User", user.id, actor_id, {"image_path": relative_path})
+        return user
+
+    async def delete_image(self, user_id: int, actor_id: int) -> None:
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            raise NotFoundException("Usuario no encontrado")
+
+        if user.image_path:
+            storage = get_storage()
+            await storage.delete(user.image_path)
+            await self.repo.update(user, image_path=None)
+            await self.audit.log_update("User", user.id, actor_id, {"image_path": None})

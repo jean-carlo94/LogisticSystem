@@ -1,10 +1,12 @@
 import time
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.api import router as api_v1_router
 from app.core.config import settings
@@ -13,8 +15,12 @@ from app.core.rate_limit import rate_limit_middleware
 from app.core.seed import seed_defaults
 
 
+STATIC_DIR = Path(settings.STORAGE_PATH).parent
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    STATIC_DIR.mkdir(parents=True, exist_ok=True)
     await seed_defaults()
     yield
 
@@ -32,6 +38,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.exception_handler(AppException)

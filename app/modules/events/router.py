@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends
 
 from app.core.exceptions import NotFoundException
-from app.core.pagination import PaginatedResponse, PaginationParams
+from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import require_permission
 from app.modules.events.deps import get_event_service
 from app.modules.events.schema import EventResponse
@@ -21,10 +21,11 @@ router = APIRouter(tags=["events"])
 @router.get("/events/", response_model=PaginatedResponse[EventResponse])
 async def list_events(
     pag: dict = PaginationParams,
+    filters: dict = FilterParams,
     service: EventService = Depends(get_event_service),
     _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
 ) -> PaginatedResponse[EventResponse]:
-    return await service.get_all(page=pag["page"], size=pag["size"])
+    return await service.get_all(page=pag["page"], size=pag["size"], filters=filters or None)
 
 
 @router.get("/events/{event_id}", response_model=EventResponse)

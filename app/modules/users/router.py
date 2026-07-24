@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
-from app.core.pagination import PaginatedResponse
+from app.core.pagination import FilterParams, PaginatedResponse
 from app.core.security import get_current_user, require_permission
 from app.modules.users.deps import get_user_service
 from app.core.permissions import PermissionCode
@@ -52,14 +52,36 @@ async def update_me(
     return await service.update_profile(current_user, data)
 
 
+@auth_router.post("/me/image", response_model=UserResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service),
+) -> UserResponse:
+    return await service.upload_image(current_user.id, file, current_user.id)
+
+
+@auth_router.delete("/me/image", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_avatar(
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service),
+) -> None:
+    await service.delete_image(current_user.id, current_user.id)
+
+
 # ── Admin CRUD usuarios ──
 
 @users_router.get("/", response_model=PaginatedResponse[UserAdminResponse])
 async def list_users(
+    email: str | None = Query(default=None, description="Email (único)"),
+    filters: dict = FilterParams,
     service: UserService = Depends(get_user_service),
     _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
-    return await service.get_all()
+    merged = dict(filters)
+    if email is not None:
+        merged["email"] = email
+    return await service.get_all(filters=merged or None)
 
 
 @users_router.get("/{user_id}", response_model=UserAdminResponse)
@@ -107,3 +129,22 @@ async def assign_role_to_user(
     _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
     await service.assign_role(user_id, data.role_id)
+
+
+@users_router.post("/{user_id}/image", response_model=UserAdminResponse)
+async def upload_user_image(
+    user_id: int,
+    file: UploadFile = File(...),
+    service: UserService = Depends(get_user_service),
+    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+):
+    return await service.upload_image(user_id, file, admin.id)
+
+
+@users_router.delete("/{user_id}/image", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_image(
+    user_id: int,
+    service: UserService = Depends(get_user_service),
+    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+):
+    await service.delete_image(user_id, admin.id)

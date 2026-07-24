@@ -1,0 +1,480 @@
+{
+  "version": "0.2.0",
+  "description": "LogisticSystem API — Nuevos endpoints y reglas de negocio para imágenes, códigos de barras, QR y estanterías",
+
+  "nuevos_endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/v1/products/{product_id}/image",
+      "auth": "PRODUCTS_UPDATE",
+      "body": "multipart/form-data con campo 'file' (imagen)",
+      "response": "ProductResponse con image_url actualizado",
+      "ejemplo_curl": "curl -X POST http://localhost:8000/api/v1/products/1/image -H 'Authorization: Bearer TOKEN' -F 'file=@foto.jpg'",
+      "notas": [
+        "Reemplaza imagen anterior si existe. Borra archivo viejo del storage.",
+        "Formatos aceptados: cualquier tipo de imagen (jpg, png, webp, etc).",
+        "URL generada: /static/uploads/products/product_1_a1b2c3d4.jpg"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/products/{product_id}/image",
+      "auth": "PRODUCTS_UPDATE",
+      "body": null,
+      "response": "204 No Content",
+      "notas": [
+        "Borra imagen del storage y limpia image_path en DB.",
+        "Si no tiene imagen, no hace nada (no da error)."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/products/{product_id}/qr",
+      "auth": "PRODUCTS_READ",
+      "body": null,
+      "response": {
+        "product_id": 5,
+        "name": "Tornillo M3",
+        "barcode": "7891234567890",
+        "shelf": {
+          "code": "A-01-03",
+          "aisle": "A",
+          "row": 1,
+          "level": 3
+        }
+      },
+      "notas": [
+        "shelf es null si el producto no está asignado a ninguna estantería.",
+        "Si el producto está en múltiples estantes, devuelve el primero encontrado.",
+        "No genera imagen PNG. El frontend renderiza el QR con esta data."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/me/image",
+      "auth": "Autenticado (cualquier rol)",
+      "body": "multipart/form-data con campo 'file' (imagen)",
+      "response": "UserResponse con image_url actualizado",
+      "notas": [
+        "Sube avatar del usuario autenticado.",
+        "Reemplaza imagen anterior si existe."
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auth/me/image",
+      "auth": "Autenticado (cualquier rol)",
+      "body": null,
+      "response": "204 No Content",
+      "notas": [
+        "Borra avatar del usuario autenticado.",
+        "Si no tiene imagen, no da error."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/users/{user_id}/image",
+      "auth": "USERS_MANAGE",
+      "body": "multipart/form-data con campo 'file'",
+      "response": "UserAdminResponse con image_url actualizado",
+      "notas": [
+        "Admin sube imagen a cualquier usuario.",
+        "Reemplaza imagen anterior si existe."
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/users/{user_id}/image",
+      "auth": "USERS_MANAGE",
+      "body": null,
+      "response": "204 No Content",
+      "notas": [
+        "Admin borra imagen de cualquier usuario."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelves/",
+      "auth": "SHELVES_READ",
+      "query_params": {
+        "page": "int, default=1, min=1",
+        "size": "int, default=20, min=1, max=100",
+        "aisle": "string, opcional, filtra por pasillo (ej: 'A')"
+      },
+      "response": {
+        "items": [
+          {
+            "id": 1,
+            "name": "Estante Principal A1",
+            "code": "A-01-03",
+            "aisle": "A",
+            "row": 1,
+            "level": 3,
+            "max_weight_kg": 200.0,
+            "width_cm": 100.0,
+            "height_cm": 50.0,
+            "depth_cm": 40.0,
+            "created_at": "2026-07-24T00:00:00Z",
+            "updated_at": "2026-07-24T00:00:00Z"
+          }
+        ],
+        "total": 1,
+        "page": 1,
+        "size": 20,
+        "pages": 1
+      },
+      "notas": [
+        "Lista paginada con filtro opcional por pasillo (aisle)."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelves/{shelf_id}",
+      "auth": "SHELVES_READ",
+      "body": null,
+      "response": {
+        "id": 1,
+        "name": "Estante Principal A1",
+        "code": "A-01-03",
+        "aisle": "A",
+        "row": 1,
+        "level": 3,
+        "max_weight_kg": 200.0,
+        "width_cm": 100.0,
+        "height_cm": 50.0,
+        "depth_cm": 40.0,
+        "items": [
+          {
+            "id": 1,
+            "shelf_id": 1,
+            "product_id": 5,
+            "product_name": "Tornillo M3",
+            "quantity": 10
+          }
+        ],
+        "current_weight_kg": 5.0,
+        "created_at": "2026-07-24T00:00:00Z",
+        "updated_at": "2026-07-24T00:00:00Z"
+      },
+      "notas": [
+        "Incluye lista de items con nombre de producto y cantidad.",
+        "current_weight_kg = Σ(producto.weight_kg × item.quantity). Calculado on-the-fly.",
+        "current_weight_kg redondeado a 2 decimales."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelves/",
+      "auth": "SHELVES_CREATE",
+      "body": {
+        "name": "Estante Principal A1",
+        "code": "A-01-03",
+        "aisle": "A",
+        "row": 1,
+        "level": 3,
+        "max_weight_kg": 200.0,
+        "width_cm": 100.0,
+        "height_cm": 50.0,
+        "depth_cm": 40.0
+      },
+      "response": "ShelfResponse (201 Created)",
+      "notas": [
+        "code es único. Si ya existe → 409 Conflict.",
+        "Todos los campos con _cm y _kg son ≥ 0."
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/shelves/{shelf_id}",
+      "auth": "SHELVES_UPDATE",
+      "body": {
+        "name": "Estante Renombrado",
+        "max_weight_kg": 250.0
+      },
+      "response": "ShelfResponse",
+      "notas": [
+        "Todos los campos son opcionales (partial update).",
+        "Si cambia code y ya existe → 409 Conflict."
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/shelves/{shelf_id}",
+      "auth": "SHELVES_DELETE",
+      "body": null,
+      "response": "204 No Content",
+      "notas": [
+        "No se puede eliminar si tiene productos asignados → 409 Conflict.",
+        "Eliminar en cascada NO está habilitado. Debes desasignar primero."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelves/{shelf_id}/items",
+      "auth": "SHELVES_UPDATE",
+      "body": {
+        "product_id": 5,
+        "quantity": 10
+      },
+      "response": {
+        "id": 1,
+        "shelf_id": 1,
+        "product_id": 5,
+        "product_name": "",
+        "quantity": 10
+      },
+      "notas": [
+        "Asigna producto a estantería. quantity mínimo 1.",
+        "Valida capacidad ANTES de asignar (ver reglas de negocio).",
+        "Si producto ya existe en esa estantería → 409 Conflict.",
+        "product_name viene vacío en respuesta de creación (se completa en GET detail)."
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/shelves/{shelf_id}/items/{item_id}",
+      "auth": "SHELVES_UPDATE",
+      "body": {
+        "quantity": 15
+      },
+      "response": "ShelfItemResponse",
+      "notas": [
+        "Actualiza cantidad de producto en estantería.",
+        "quantity ≥ 0. Si es 0, elimina el item (equivale a DELETE).",
+        "Valida capacidad con la nueva cantidad (excluye peso propio del item).",
+        "Si item no pertenece al shelf_id → 404."
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/shelves/{shelf_id}/items/{item_id}",
+      "auth": "SHELVES_UPDATE",
+      "body": null,
+      "response": "204 No Content",
+      "notas": [
+        "Desasigna producto de estantería. Libera capacidad.",
+        "Si item no existe o no pertenece al shelf_id → 404."
+      ]
+    }
+  ],
+
+  "endpoints_modificados": [
+    {
+      "method": "GET",
+      "path": "/api/v1/products/",
+      "cambios": [
+        "Nuevos query params: state (ProductState), barcode (string).",
+        "Respuesta ahora incluye: barcode, weight_kg, width_cm, height_cm, depth_cm, image_path, image_url."
+      ],
+      "ejemplo_request": "GET /api/v1/products/?state=ACTIVE&barcode=7891234567890&page=1&size=20",
+      "ejemplo_response": {
+        "items": [
+          {
+            "id": 5,
+            "name": "Tornillo M3",
+            "description": "Tornillo métrico 3mm",
+            "price": 0.50,
+            "stock": 100,
+            "state": "ACTIVE",
+            "barcode": "7891234567890",
+            "weight_kg": 0.001,
+            "width_cm": 0.3,
+            "height_cm": 0.3,
+            "depth_cm": 1.2,
+            "image_path": "products/product_5_a1b2c3d4.jpg",
+            "image_url": "/static/products/product_5_a1b2c3d4.jpg",
+            "create_at": "2026-07-24T00:00:00Z",
+            "update_at": "2026-07-24T00:00:00Z"
+          }
+        ],
+        "total": 1,
+        "page": 1,
+        "size": 20,
+        "pages": 1
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/products/{product_id}",
+      "cambios": [
+        "Respuesta incluye campos nuevos: barcode, weight_kg, width_cm, height_cm, depth_cm, image_path, image_url."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/products/",
+      "cambios": [
+        "Body acepta campos nuevos (todos opcionales excepto obligatorios originales):",
+        "  barcode (string, max 128, unique), weight_kg (float ≥0), width_cm (float ≥0), height_cm (float ≥0), depth_cm (float ≥0).",
+        "Regla: si barcode enviado y ya existe → 409 Conflict."
+      ],
+      "ejemplo_body": {
+        "name": "Tornillo M3",
+        "description": "Tornillo métrico 3mm",
+        "price": 0.50,
+        "stock": 100,
+        "state": "ACTIVE",
+        "barcode": "7891234567890",
+        "weight_kg": 0.001,
+        "width_cm": 0.3,
+        "height_cm": 0.3,
+        "depth_cm": 1.2
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/products/{product_id}",
+      "cambios": [
+        "Body acepta campos nuevos (todos opcionales): barcode, weight_kg, width_cm, height_cm, depth_cm.",
+        "Regla: si barcode cambia y nuevo valor ya existe → 409 Conflict."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/",
+      "cambios": [
+        "Nuevos query params: is_active (bool), email (string).",
+        "Respuesta incluye: image_path, image_url."
+      ],
+      "ejemplo_request": "GET /api/v1/users/?is_active=true&email=user@email.com"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/{user_id}",
+      "cambios": [
+        "Respuesta incluye: image_path, image_url."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "cambios": [
+        "Respuesta incluye: image_path, image_url."
+      ]
+    }
+  ],
+
+  "reglas_de_negocio": {
+    "validacion_capacidad_estanteria": {
+      "descripcion": "Al asignar o actualizar cantidad de un producto en una estantería, se validan dos aspectos:",
+      "dimensiones": {
+        "regla": "Cada dimensión del producto (width_cm, height_cm, depth_cm) debe ser ≤ la dimensión correspondiente de la estantería.",
+        "condicion": "Solo se valida si el valor de la estantería es > 0 (si es 0, se asume sin límite).",
+        "ejemplo_error": "Ancho del producto (50cm) excede el de la estantería (40cm)"
+      },
+      "peso": {
+        "regla": "El peso total de todos los productos en la estantería NO debe exceder max_weight_kg.",
+        "calculo": "Σ(producto.weight_kg × item.quantity) ≤ shelf.max_weight_kg",
+        "condicion": "Solo se valida si max_weight_kg > 0.",
+        "ejemplo_error": "Peso total (210kg) excede la capacidad máxima (200kg)",
+        "nota": "Al actualizar cantidad (PUT item), el peso del propio item se excluye del cálculo base para evitar doble conteo."
+      },
+      "errores_combinados": {
+        "formato": "Errores se concatenan con '; '. Ej: 'Ancho del producto (50cm) excede...; Peso total (210kg) excede...'",
+        "status": "400 Bad Request (ValidationException)"
+      }
+    },
+    "state_machine_productos": {
+      "descripcion": "El estado del producto se resuelve automáticamente según el stock:",
+      "reglas": [
+        "Si stock == 0 → estado forzado a NO_STOCK (sin importar qué estado envió el usuario).",
+        "Si stock > 0 Y estado actual es NO_STOCK → estado forzado a ACTIVE.",
+        "En cualquier otro caso → se respeta el estado enviado por el usuario."
+      ],
+      "estados_validos": ["ACTIVE", "INACTIVE", "NO_STOCK", "DISCONTINUED"]
+    },
+    "barcode_uniqueness": {
+      "descripcion": "El campo barcode en productos es unique y opcional.",
+      "reglas": [
+        "Si barcode es null → sin restricción.",
+        "Si barcode tiene valor → debe ser único en la tabla products.",
+        "CREATE: si barcode ya existe → 409 Conflict 'El código de barras ya está en uso'.",
+        "UPDATE: si barcode cambia y ya existe en otro producto → 409 Conflict."
+      ]
+    },
+    "imagenes": {
+      "descripcion": "Las imágenes se almacenan en el servidor (local storage). S3 en el futuro.",
+      "almacenamiento": {
+        "backend": "local",
+        "directorio_base": "static/uploads/",
+        "subdirectorios": "products/ y users/",
+        "nombrado": "{prefix}_{uuid_hex}{extension} (ej: product_5_a1b2c3d4.jpg)"
+      },
+      "serving": "FastAPI StaticFiles montado en /static → URL: /static/uploads/products/product_5_a1b2c3d4.jpg",
+      "reglas": [
+        "POST image: reemplaza imagen anterior. Borra archivo viejo del disco. Actualiza image_path en DB.",
+        "DELETE image: borra archivo del disco. Limpia image_path en DB (set null).",
+        "DELETE producto/usuario: borra imagen asociada del disco automáticamente.",
+        "image_url en response es campo computado (no existe en DB): /static/{image_path}."
+      ]
+    },
+    "qr": {
+      "descripcion": "El endpoint QR devuelve JSON con los datos del producto y su ubicación.",
+      "contenido": {
+        "product_id": "ID del producto",
+        "name": "Nombre del producto",
+        "barcode": "Código de barras (puede ser null)",
+        "shelf": "Objeto con code, aisle, row, level de la estantería. null si no asignado."
+      },
+      "nota": "Si el producto está en múltiples estantes, devuelve el primero (orden indeterminado).",
+      "uso": "El frontend usa esta data para renderizar un QR code (no se genera imagen PNG en el backend)."
+    },
+    "filtros_get_all": {
+      "descripcion": "Todas las rutas GET de listado aceptan query params de filtro por igualdad exacta.",
+      "soportados": {
+        "products": ["state (ProductState)", "barcode (string)"],
+        "users": ["is_active (bool)", "email (string)"],
+        "shelves": ["aisle (string)"]
+      },
+      "comportamiento": {
+        "multiples_filtros": "Se combinan con AND.",
+        "sin_filtros": "Comportamiento original (sin where extra).",
+        "filtros_invalidos": "Campos que no existen en el modelo se ignoran silenciosamente."
+      }
+    },
+    "eliminar_estanteria": {
+      "regla": "No se puede eliminar una estantería que tiene productos asignados (shelf_items).",
+      "error": "409 Conflict: 'No se puede eliminar una estantería con productos asignados'",
+      "workaround": "Eliminar o mover todos los shelf_items antes de eliminar la estantería."
+    }
+  },
+
+  "permisos_nuevos": {
+    "shelves_create": "Crear estanterías",
+    "shelves_read": "Ver estanterías",
+    "shelves_update": "Actualizar estanterías y gestionar items",
+    "shelves_delete": "Eliminar estanterías"
+  },
+
+  "permisos_asignados": {
+    "Admin": ["TODOS los permisos (7 existentes + 4 shelves)"],
+    "Operator": ["products_create", "products_read", "products_update", "shelves_read", "shelves_update"],
+    "Viewer": ["products_read", "shelves_read"]
+  },
+
+  "modelos_nuevos": {
+    "shelves": {
+      "columns": ["id", "name", "code", "aisle", "row", "level", "max_weight_kg", "width_cm", "height_cm", "depth_cm", "created_at", "updated_at"],
+      "unique": ["code"],
+      "nota": "aisle/row/level son libres, el usuario define su esquema de ubicación."
+    },
+    "shelf_items": {
+      "columns": ["id", "shelf_id (FK→shelves)", "product_id (FK→products)", "quantity"],
+      "unique_constraint": "(shelf_id, product_id)",
+      "nota": "Mismo producto no puede aparecer dos veces en la misma estantería. Usa PUT item para cambiar cantidad."
+    }
+  },
+
+  "campos_nuevos_en_productos": {
+    "barcode": "String(128), unique, nullable, indexado",
+    "image_path": "String(500), nullable",
+    "weight_kg": "Float, default=0, nullable=False (clamp ≥0 vía property setter)",
+    "width_cm": "Float, default=0, nullable=False (clamp ≥0)",
+    "height_cm": "Float, default=0, nullable=False (clamp ≥0)",
+    "depth_cm": "Float, default=0, nullable=False (clamp ≥0)"
+  },
+
+  "campos_nuevos_en_usuarios": {
+    "image_path": "String(500), nullable"
+  }
+}

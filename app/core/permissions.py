@@ -9,3 +9,7 @@ class PermissionCode(str, Enum):
     EVENTS_READ = "events_read"
     ROLES_MANAGE = "roles_manage"
     USERS_MANAGE = "users_manage"
+    SHELVES_CREATE = "shelves_create"
+    SHELVES_READ = "shelves_read"
+    SHELVES_UPDATE = "shelves_update"
+    SHELVES_DELETE = "shelves_delete"

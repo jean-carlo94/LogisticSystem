@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
 
+    STORAGE_BACKEND: str = "local"
+    STORAGE_PATH: str = "static/uploads"
+    S3_BUCKET: str = ""
+    S3_REGION: str = "us-east-1"
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+    S3_ENDPOINT: str = ""
+
 
 @lru_cache()
 def get_settings() -> Settings:
