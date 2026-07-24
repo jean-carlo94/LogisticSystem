@@ -7,10 +7,12 @@ from fastapi.responses import JSONResponse
 from app.api.v1.api import router as api_v1_router
 from app.core.config import settings
 from app.core.exceptions import AppException
+from app.core.seed import seed_defaults
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await seed_defaults()
     yield
 
 

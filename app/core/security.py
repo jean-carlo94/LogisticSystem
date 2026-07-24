@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.exceptions import UnauthorizedException
+from app.core.exceptions import ForbiddenException, UnauthorizedException
 
 if TYPE_CHECKING:
     from app.modules.users.model import User
@@ -52,3 +52,31 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise UnauthorizedException("Credenciales invalidas o expiradas")
     return user
+
+
+def require_permission(permission_code: str):
+    async def dependency(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        if current_user.is_super_admin:
+            return current_user
+
+        from sqlalchemy import select
+        from app.modules.roles.model import Permission, RolePermission, UserRole
+
+        result = await db.scalar(
+            select(Permission).join(
+                RolePermission, RolePermission.permission_id == Permission.id
+            ).join(
+                UserRole, UserRole.role_id == RolePermission.role_id
+            ).where(
+                UserRole.user_id == current_user.id,
+                Permission.code == permission_code,
+            )
+        )
+        if not result:
+            raise ForbiddenException(f"No tienes permiso: {permission_code.value}")
+        return current_user
+
+    return dependency

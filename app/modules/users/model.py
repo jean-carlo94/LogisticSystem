@@ -17,6 +17,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         "createdAt", server_default=func.now(), nullable=False
     )
+    is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     @classmethod
     async def find_by_email(cls, db: AsyncSession, email: str):

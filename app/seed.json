@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "products_create": "Crear productos",
+    "products_read": "Ver productos",
+    "products_update": "Actualizar productos",
+    "products_delete": "Eliminar productos",
+    "events_read": "Ver eventos de auditoría",
+    "roles_manage": "Gestionar roles y permisos",
+    "users_manage": "Gestionar usuarios"
+  },
+  "roles": {
+    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage"],
+    "Operator": ["products_create", "products_read", "products_update"],
+    "Viewer": ["products_read"]
+  }
+}

@@ -11,6 +11,7 @@ from app.core.database import Base
 from app.modules.products.model import Product
 from app.modules.events.model import Event
 from app.modules.users.model import User
+from app.modules.roles.model import Permission, Role, RolePermission, UserRole
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
