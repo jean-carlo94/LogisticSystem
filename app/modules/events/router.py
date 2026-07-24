@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.pagination import PaginatedResponse
+from app.core.security import get_current_user
 from app.modules.events.deps import get_event_service
 from app.modules.events.schema import EventResponse
 from app.modules.events.service import EventService
@@ -13,6 +14,7 @@ def list_events(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     service: EventService = Depends(get_event_service),
+    _user = Depends(get_current_user),
 ) -> PaginatedResponse[EventResponse]:
     return service.get_all(page=page, size=size)
 
@@ -21,6 +23,7 @@ def list_events(
 def retrieve_event(
     event_id: int,
     service: EventService = Depends(get_event_service),
+    _user = Depends(get_current_user),
 ) -> EventResponse:
     event = service.get_by_id(event_id)
     if not event:
@@ -38,5 +41,6 @@ def list_entity_events(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     service: EventService = Depends(get_event_service),
+    _user = Depends(get_current_user),
 ) -> PaginatedResponse[EventResponse]:
     return service.get_by_entity(entity_type, entity_id, page=page, size=size)
