@@ -1,15 +1,14 @@
 from typing import Sequence
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
+from app.core.repository import BaseRepository
 from app.modules.events.enums import ActionType
 from app.modules.events.model import Event
 
 
-class EventRepository:
-    def __init__(self, db: Session):
-        self.db = db
+class EventRepository(BaseRepository[Event]):
+    model = Event
 
     def create(
         self,
@@ -24,14 +23,7 @@ class EventRepository:
         return event
 
     def get_all(self, skip: int = 0, limit: int = 100) -> tuple[Sequence[Event], int]:
-        total = self.db.scalar(select(func.count()).select_from(Event))
-        items = self.db.scalars(
-            select(Event).order_by(Event.create_at.desc()).offset(skip).limit(limit)
-        ).all()
-        return items, total
-
-    def get_by_id(self, event_id: int) -> Event | None:
-        return self.db.get(Event, event_id)
+        return super().get_all(skip, limit, order_by=Event.create_at.desc())
 
     def get_by_product(
         self, product_id: int, skip: int = 0, limit: int = 100
