@@ -24,15 +24,6 @@ class Product(Base):
         "createAt", server_default=func.now(), nullable=False
     )
 
-    def __init__(self, **kwargs):
-        if "name" in kwargs:
-            self.name = kwargs.pop("name")
-        if "price" in kwargs:
-            self.price = kwargs.pop("price")
-        if "stock" in kwargs:
-            self.stock = kwargs.pop("stock")
-        super().__init__(**kwargs)
-
     @property
     def name(self) -> str:
         return self._name

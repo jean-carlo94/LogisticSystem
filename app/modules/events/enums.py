@@ -1,7 +1,7 @@
-from enum import StrEnum
+from enum import Enum
 
 
-class ActionType(StrEnum):
+class ActionType(str, Enum):
     CREATE = "CREATE"
     UPDATE = "UPDATE"
     DELETE = "DELETE"

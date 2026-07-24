@@ -7,8 +7,10 @@ from app.modules.events.enums import ActionType
 
 class EventResponse(BaseModel):
     id: int
-    product_id: int
+    entity_type: str
+    entity_id: int
     action: ActionType
+    user_id: int
     description: str | None = None
     create_at: datetime
 

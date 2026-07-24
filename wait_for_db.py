@@ -5,11 +5,11 @@ import time
 import psycopg2
 from psycopg2 import OperationalError
 
-DB_USER = os.getenv("POSTGRES_USER", "assisprex_user")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "assisprex_pass")
+DB_USER = os.getenv("POSTGRES_USER", "logistic_system_user")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "logistic_system_pass")
 DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-DB_NAME = os.getenv("POSTGRES_DB", "assisprex_db")
+DB_NAME = os.getenv("POSTGRES_DB", "logistic_system_db")
 
 DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 

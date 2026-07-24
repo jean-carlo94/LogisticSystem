@@ -28,11 +28,15 @@ def retrieve_event(
     return event
 
 
-@router.get("/products/{product_id}/events/", response_model=PaginatedResponse[EventResponse])
-def list_product_events(
-    product_id: int,
+@router.get(
+    "/{entity_type}/{entity_id}/events/",
+    response_model=PaginatedResponse[EventResponse],
+)
+def list_entity_events(
+    entity_type: str,
+    entity_id: int,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     service: EventService = Depends(get_event_service),
 ) -> PaginatedResponse[EventResponse]:
-    return service.get_by_product(product_id, page=page, size=size)
+    return service.get_by_entity(entity_type, entity_id, page=page, size=size)

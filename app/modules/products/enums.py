@@ -1,7 +1,7 @@
-from enum import StrEnum
+from enum import Enum
 
 
-class ProductState(StrEnum):
+class ProductState(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
     NO_STOCK = "NO_STOCK"

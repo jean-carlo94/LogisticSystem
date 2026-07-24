@@ -15,11 +15,11 @@ class EventService:
     def get_by_id(self, event_id: int) -> Event | None:
         return self.event_repo.get_by_id(event_id)
 
-    def get_by_product(
-        self, product_id: int, page: int = 1, size: int = 20
+    def get_by_entity(
+        self, entity_type: str, entity_id: int, page: int = 1, size: int = 20
     ) -> PaginatedResult[Event]:
         skip = (page - 1) * size
-        items, total = self.event_repo.get_by_product(
-            product_id, skip=skip, limit=size
+        items, total = self.event_repo.get_by_entity(
+            entity_type, entity_id, skip=skip, limit=size
         )
         return PaginatedResult.of(list(items), total, page, size)

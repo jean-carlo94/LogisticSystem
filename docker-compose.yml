@@ -1,16 +1,16 @@
 services:
   app:
     build: .
-    container_name: AssisPrex-api
+    container_name: logistic_system-api
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
       - .:/app
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-assisprex_user}:${POSTGRES_PASSWORD:-assisprex_pass}@postgres:5432/${POSTGRES_DB:-assisprex_db}
-      - POSTGRES_USER=${POSTGRES_USER:-assisprex_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-assisprex_pass}
-      - POSTGRES_DB=${POSTGRES_DB:-assisprex_db}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-logistic_system_user}:${POSTGRES_PASSWORD:-logistic_system_pass}@postgres:5432/${POSTGRES_DB:-logistic_system_db}
+      - POSTGRES_USER=${POSTGRES_USER:-logistic_system_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-logistic_system_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-logistic_system_db}
       - SECRET_KEY=${SECRET_KEY}
       - API_V1_STR=${API_V1_STR}
       - PROJECT_NAME=${PROJECT_NAME}
@@ -24,17 +24,17 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: AssisPrex-postgres
+    container_name: logistic_system-postgres
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-assisprex_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-assisprex_pass}
-      - POSTGRES_DB=${POSTGRES_DB:-assisprex_db}
+      - POSTGRES_USER=${POSTGRES_USER:-logistic_system_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-logistic_system_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-logistic_system_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-assisprex_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-logistic_system_user}"]
       interval: 10s
       timeout: 5s
       retries: 5
