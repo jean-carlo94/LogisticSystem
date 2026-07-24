@@ -52,6 +52,7 @@ class ShelfItemResponse(BaseModel):
 class ShelfDetailResponse(ShelfResponse):
     items: list[ShelfItemResponse] = []
     current_weight_kg: float = 0
+    current_volume_cm3: float = 0
 
 
 class ShelfItemCreate(BaseModel):

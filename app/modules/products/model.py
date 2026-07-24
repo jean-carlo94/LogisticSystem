@@ -21,8 +21,8 @@ class Product(Base):
         default=ProductState.ACTIVE,
         nullable=False,
     )
-    barcode: Mapped[str | None] = mapped_column(
-        String(128), unique=True, default=None, index=True
+    _barcode: Mapped[str | None] = mapped_column(
+        "barcode", String(128), unique=True, default=None, index=True
     )
     image_path: Mapped[str | None] = mapped_column(String(500), default=None)
     _weight_kg: Mapped[float] = mapped_column("weight_kg", Float, default=0, nullable=False)
@@ -91,3 +91,15 @@ class Product(Base):
     @depth_cm.setter
     def depth_cm(self, value: float):
         self._depth_cm = max(0, value)
+
+    @property
+    def barcode(self) -> str | None:
+        return self._barcode
+
+    @barcode.setter
+    def barcode(self, value: str | None):
+        if value is not None:
+            value = value.strip()
+        if not value:
+            value = None
+        self._barcode = value

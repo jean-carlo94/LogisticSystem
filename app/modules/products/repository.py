@@ -9,7 +9,7 @@ class ProductRepository(BaseRepository):
 
     async def find_by_barcode(self, barcode: str) -> Product | None:
         return await self.db.scalar(
-            select(Product).where(Product.barcode == barcode)
+            select(Product).where(Product._barcode == barcode)
         )
 
     async def get_product_shelves(self, product_id: int):

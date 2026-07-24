@@ -47,12 +47,15 @@ class ShelfService:
             products_map = {p.id: p for p in products}
 
         current_weight = 0.0
+        current_volume = 0.0
         item_responses = []
         for item in items:
             product = products_map.get(item.product_id)
             product_name = product.name if product else "?"
             product_weight = product.weight_kg if product else 0
+            product_volume = (product.width_cm * product.height_cm * product.depth_cm) if product else 0
             current_weight += product_weight * item.quantity
+            current_volume += product_volume * item.quantity
             item_responses.append(
                 ShelfItemResponse(
                     id=item.id,
@@ -78,6 +81,7 @@ class ShelfService:
             updated_at=shelf.updated_at,
             items=item_responses,
             current_weight_kg=round(current_weight, 2),
+            current_volume_cm3=round(current_volume, 2),
         )
 
     async def create(self, data: ShelfCreate, user_id: int) -> Shelf:
@@ -128,7 +132,13 @@ class ShelfService:
 
         existing = await self.item_repo.get_by_shelf_product(shelf_id, data.product_id)
         if existing:
-            raise ConflictException("El producto ya está asignado a esta estantería")
+            new_qty = existing.quantity + data.quantity
+            other_weight = await self._get_total_weight(shelf_id, exclude_item_id=existing.id)
+            other_volume = await self._get_total_volume(shelf_id, exclude_item_id=existing.id)
+            await self._validate_capacity(shelf, product, new_qty, other_weight, other_volume)
+            item = await self.item_repo.update(existing, new_qty)
+            await self.audit.log_update("ShelfItem", item.id, user_id, {"quantity": new_qty})
+            return item
 
         await self._validate_capacity(shelf, product, data.quantity)
 
@@ -153,7 +163,8 @@ class ShelfService:
                 raise NotFoundException("Producto no encontrado")
 
             other_weight = await self._get_total_weight(shelf_id, exclude_item_id=item_id)
-            await self._validate_capacity(shelf, product, data.quantity, other_weight)
+            other_volume = await self._get_total_volume(shelf_id, exclude_item_id=item_id)
+            await self._validate_capacity(shelf, product, data.quantity, other_weight, other_volume)
 
         if data.quantity == 0:
             await self.item_repo.delete(item)
@@ -178,6 +189,7 @@ class ShelfService:
         product,
         quantity: int,
         existing_weight: float = 0,
+        existing_volume: float = 0,
     ) -> None:
         errors = []
 
@@ -193,6 +205,16 @@ class ShelfService:
             errors.append(
                 f"Fondo del producto ({product.depth_cm}cm) excede el de la estantería ({shelf.depth_cm}cm)"
             )
+
+        shelf_volume = shelf.width_cm * shelf.height_cm * shelf.depth_cm
+        if shelf_volume > 0:
+            product_volume = product.width_cm * product.height_cm * product.depth_cm
+            added_volume = product_volume * quantity
+            total_volume = existing_volume + added_volume
+            if total_volume > shelf_volume:
+                errors.append(
+                    f"Volumen total ({total_volume:.1f}cm³) excede la capacidad ({shelf_volume:.1f}cm³)"
+                )
 
         if shelf.max_weight_kg > 0:
             added_weight = product.weight_kg * quantity
@@ -214,6 +236,18 @@ class ShelfService:
             product = await ShelfService._get_product(self.shelf_repo.db, item.product_id)
             if product:
                 total += product.weight_kg * item.quantity
+        return total
+
+    async def _get_total_volume(self, shelf_id: int, exclude_item_id: int | None = None) -> float:
+        items = await self.item_repo.get_items_by_shelf(shelf_id)
+        total = 0.0
+        for item in items:
+            if exclude_item_id and item.id == exclude_item_id:
+                continue
+            product = await ShelfService._get_product(self.shelf_repo.db, item.product_id)
+            if product:
+                product_volume = product.width_cm * product.height_cm * product.depth_cm
+                total += product_volume * item.quantity
         return total
 
     @staticmethod
