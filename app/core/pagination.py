@@ -2,6 +2,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Generic, TypeVar
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
 
 T = TypeVar("T")
@@ -32,3 +33,13 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int
     size: int
     pages: int
+
+
+def get_pagination(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+) -> dict[str, int]:
+    return {"page": page, "size": size}
+
+
+PaginationParams = Depends(get_pagination)

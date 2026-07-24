@@ -1,18 +1,15 @@
 from fastapi import Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import AuditLogger, get_audit_logger
+from app.api.dependencies import get_audit_logger
+from app.core.audit import AuditLogger
 from app.core.database import get_db
 from app.modules.users.repository import UserRepository
 from app.modules.users.service import UserService
 
 
-def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
-    return UserRepository(db)
-
-
-def get_user_service(
-    user_repo: UserRepository = Depends(get_user_repository),
+async def get_user_service(
+    db: AsyncSession = Depends(get_db),
     audit: AuditLogger = Depends(get_audit_logger),
 ) -> UserService:
-    return UserService(user_repo, audit)
+    return UserService(UserRepository(db), audit)

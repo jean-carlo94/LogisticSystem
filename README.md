@@ -1,187 +1,206 @@
 # LogisticSystem API
 
-API REST para gestión de productos construida con FastAPI, SQLAlchemy y PostgreSQL.
+API REST con autenticación JWT, gestión de productos y auditoría global. Construida con FastAPI, SQLAlchemy y PostgreSQL.
 
 ## Estructura del proyecto
 
 ```
-LogisticSystem/
-├── app/
-│   ├── main.py                  # Punto de entrada, lifespan, registro de rutas
-│   ├── core/
-│   │   ├── config.py            # Configuración con pydantic-settings
-│   │   └── database.py          # Engine, SessionLocal, Base y get_db
-│   ├── modules/
-│   │   ├── products/
-│   │   │   ├── deps.py          # Factorías de inyección (repo, service)
-│   │   │   ├── model.py         # Modelo SQLAlchemy (Product)
-│   │   │   ├── repository.py    # Acceso a datos (ProductRepository)
-│   │   │   ├── schema.py        # Schemas Pydantic (CRUD + response)
-│   │   │   ├── service.py       # Lógica de negocio (ProductService)
-│   │   │   └── router.py        # Endpoints REST
-│   │   └── events/
-│   │       ├── deps.py          # Factorías de inyección (repo, service)
-│   │       ├── enums.py         # ActionType enum
-│   │       ├── model.py         # Modelo SQLAlchemy (Event)
-│   │       ├── repository.py    # Acceso a datos (EventRepository)
-│   │       ├── schema.py        # Schema Pydantic (EventResponse)
-│   │       ├── service.py       # Lógica de negocio (EventService)
-│   │       └── router.py        # Endpoints REST (solo lectura)
-│   └── api/v1/
-│       └── api.py               # Router principal v1
-├── docker-compose.yml
-├── Dockerfile
-├── start.sh                     # Entrypoint del contenedor
-├── wait_for_db.py               # Espera a que PostgreSQL esté listo
-├── .env                         # Variables de entorno
-└── requirements.txt
+app/
+├── main.py                  # Punto de entrada, lifespan (crea tablas), CORS
+├── core/
+│   ├── config.py            # Configuración con pydantic-settings
+│   ├── database.py          # Engine, SessionLocal, Base con CRUD global
+│   ├── security.py          # JWT, hash de passwords, get_current_user
+│   ├── audit.py             # AuditLogger inyectable (logs globales)
+│   └── pagination.py        # PaginatedResult + PaginatedResponse
+├── api/v1/
+│   └── api.py               # Router principal v1
+└── modules/
+    ├── products/            # CRUD de productos + máquina de estados
+    ├── events/              # Auditoría genérica (entity_type + entity_id + user_id)
+    └── users/               # Registro, login, JWT
 ```
 
 ## Arquitectura
 
-El proyecto sigue una arquitectura en capas con inyección de dependencias:
-
 ```
-Router ──Depends──> Service ──Depends──> Repository ──> SQLAlchemy
+Router ──Depends──> Service ──Depends──> Repository ──> Base (modelo con CRUD)
 ```
 
-| Capa | Responsabilidad |
-|------|----------------|
-| `router.py` | Endpoints HTTP, validación de entrada/salida |
-| `service.py` | Lógica de negocio, orquestación |
-| `repository.py` | Acceso a datos, queries SQLAlchemy |
-| `model.py` | Definición de tablas (ORM) |
-| `schema.py` | Schemas Pydantic (DTOs) |
-| `deps.py` | Factorías de inyección con `Depends` |
+Cada modelo hereda de `Base` (`app/core/database.py`) y obtiene automáticamente:
 
-Cada petición recorre la cadena: el router recibe el servicio ya construido con sus repositorios inyectados.
+| Método | Nivel | Descripción |
+|--------|-------|-------------|
+| `get_id(db, id)` | classmethod | `db.get(cls, id)` |
+| `get_all(db, skip, limit, order_by)` | classmethod | Listado paginado |
+| `create(db, **kwargs)` | classmethod | Instancia + `add/commit/refresh` |
+| `save(db)` | instancia | Persiste cambios |
+| `update(db, **kwargs)` | instancia | `setattr` por campo (dispara setters) |
+| `delete(db)` | instancia | Elimina registro |
 
-## Requisitos
+Los **property setters** de cada modelo se ejecutan automáticamente al usar `create()` y `update()`. No se requiere `__init__` manual.
 
-- [Docker](https://docs.docker.com/get-docker/) y Docker Compose
-- O alternativamente: Python 3.12+ y PostgreSQL
+## Autenticación
+
+JWT con expiración de 24 horas. Endpoints protegidos requieren header `Authorization: Bearer <token>`.
+
+```bash
+# Registro
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario@email.com","password":"123456"}'
+
+# Login (devuelve access_token)
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario@email.com","password":"123456"}'
+```
+
+## Auditoría Global
+
+Clase `AuditLogger` (`app/core/audit.py`) inyectable en cualquier servicio vía `Depends(get_audit_logger)`:
+
+```python
+self.audit.log_create("Product", entity.id, user_id, data)
+self.audit.log_update("Product", entity.id, user_id, changes)
+self.audit.log_status_change("Product", entity.id, user_id, old, new)
+self.audit.log_delete("Product", entity.id, user_id, summary)
+```
+
+Tabla `events` — genérica: `entity_type`, `entity_id`, `action`, `user_id`, `description`, `create_at`.
 
 ## Endpoints
 
+### Auth
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/auth/register` | No | Registrar usuario |
+| `POST` | `/api/v1/auth/login` | No | Iniciar sesión |
+| `GET` | `/api/v1/auth/me` | Sí | Datos del usuario autenticado |
+
 ### Productos
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `GET` | `/api/v1/products/` | Listar productos |
-| `GET` | `/api/v1/products/{id}` | Obtener producto |
-| `POST` | `/api/v1/products/` | Crear producto |
-| `PUT` | `/api/v1/products/{id}` | Actualizar producto |
-| `DELETE` | `/api/v1/products/{id}` | Eliminar producto |
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/products/` | Sí | Listar productos |
+| `GET` | `/api/v1/products/{id}` | Sí | Obtener producto |
+| `POST` | `/api/v1/products/` | Sí | Crear producto |
+| `PUT` | `/api/v1/products/{id}` | Sí | Actualizar producto |
+| `DELETE` | `/api/v1/products/{id}` | Sí | Eliminar producto |
 
-### Eventos (solo lectura)
+### Eventos (auditoría)
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `GET` | `/api/v1/events/` | Listar todos los eventos |
-| `GET` | `/api/v1/events/{id}` | Obtener un evento |
-| `GET` | `/api/v1/products/{id}/events/` | Eventos de un producto |
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/events/` | Sí | Listar todos los eventos |
+| `GET` | `/api/v1/events/{id}` | Sí | Obtener un evento |
+| `GET` | `/api/v1/{entity_type}/{entity_id}/events/` | Sí | Eventos de una entidad |
 
 ### Sistema
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `GET` | `/` | Mensaje de bienvenida |
-| `GET` | `/health` | Health check |
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| `GET` | `/` | No | Mensaje de bienvenida |
+| `GET` | `/health` | No | Health check |
 
 **Documentación interactiva:**  
 - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)  
 - ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
-## Modelo Product
+## Modelos
+
+### Product
+
+| Campo | Tipo | Setter |
+|-------|------|--------|
+| `id` | `int` | — |
+| `name` | `string` | `.strip()` |
+| `description` | `string \| null` | — |
+| `price` | `float` | `round(2)` |
+| `stock` | `int` | `max(0, value)` |
+| `state` | `enum` | `ACTIVE`, `INACTIVE`, `NO_STOCK`, `DISCONTINUED` |
+| `create_at` | `datetime` | automático |
+
+Máquina de estados (`_resolve_state`): stock=0 → `NO_STOCK`, stock>0 + `NO_STOCK` → `ACTIVE`.
+
+### Event
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `id` | `int` | Identificador único (autoincremental) |
-| `name` | `string` | Nombre del producto (requerido, máx 200) |
-| `description` | `string \| null` | Descripción del producto |
-| `price` | `float` | Precio (requerido, > 0) |
-| `stock` | `int` | Cantidad en inventario (default 0) |
-| `state` | `string` | Estado del producto (default "active") |
-| `create_at` | `datetime` | Fecha de creación (automática) |
-
-## Modelo Event
-
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `id` | `int` | Identificador único (autoincremental) |
-| `product_id` | `int` | ID del producto relacionado |
+| `id` | `int` | Auto |
+| `entity_type` | `string` | Tipo de entidad (`Product`, `User`, ...) |
+| `entity_id` | `int` | ID de la entidad |
 | `action` | `enum` | `CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGED` |
-| `description` | `string \| null` | JSON con el DTO o datos de la acción |
-| `create_at` | `datetime` | Fecha de creación (automática) |
+| `user_id` | `int` | Usuario que realizó la acción |
+| `description` | `string \| null` | JSON con datos del cambio |
+| `create_at` | `datetime` | Automático |
 
-> Los eventos se registran automáticamente al crear, actualizar o eliminar productos.  
-> La descripción es un JSON del DTO: en `CREATE` lleva todos los campos, en `UPDATE` solo los modificados, y en `STATUS_CHANGED` el estado anterior y nuevo.
+### User
 
-## Instalación y ejecución
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | `int` | Auto |
+| `email` | `string` | Único |
+| `hashed_password` | `string` | Hash bcrypt |
+| `is_active` | `bool` | Default `true` |
+| `created_at` | `datetime` | Automático |
 
-### Opción 1: Docker Compose (recomendado)
+## Instalación
+
+### Docker Compose (recomendado)
 
 ```bash
-# 1. Clonar el repositorio
 git clone <repo-url>
-cd LogisticSystem
+cd LogisticSystemAPI
 
-# 2. (Opcional) Editar variables de entorno
-# El archivo .env ya contiene valores por defecto funcionales.
-nano .env
+# Configurar .env
+cp .env.example .env
+# Editar DATABASE_URL, SECRET_KEY, etc.
 
-# 3. Construir y levantar los servicios
 docker compose up --build -d
-
-# 4. Verificar que todo esté funcionando
 curl http://localhost:8000/health
-# Respuesta esperada: {"status":"healthy"}
-
-# 5. Probar la API
-curl -X POST http://localhost:8000/api/v1/products/ \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Laptop", "price": 999.99, "stock": 10}'
-
-curl http://localhost:8000/api/v1/products/
-
-# 6. Detener los servicios
-docker compose down
+# {"status":"healthy"}
 ```
 
-### Opción 2: Desarrollo local (sin Docker)
+### Desarrollo local
 
 ```bash
-# 1. Clonar y crear entorno virtual
-git clone <repo-url>
-cd LogisticSystem
-python3 -m venv venv
-source venv/bin/activate
-
-# 2. Instalar dependencias
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Configurar la base de datos
-# Define DATABASE_URL en .env apuntando a tu PostgreSQL:
-#   DATABASE_URL=postgresql://usuario:password@localhost:5432/nombre_db
+# .env: DATABASE_URL=postgresql://user:pass@localhost:5432/db
+# .env: SECRET_KEY=<clave-segura>
 
-# 4. Ejecutar la aplicación
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# La API estará disponible en http://localhost:8000
 ```
 
-## Variables de entorno (.env)
+## Variables de entorno
 
-| Variable | Valor por defecto | Descripción |
-|----------|-------------------|-------------|
-| `DATABASE_URL` | *(requerido)* | URL de conexión a la BD |
-| `POSTGRES_USER` | `asisprex_user` | Usuario de PostgreSQL |
-| `POSTGRES_PASSWORD` | `asisprex_pass` | Contraseña de PostgreSQL |
-| `POSTGRES_DB` | `asisprex_db` | Nombre de la base de datos |
-| `SECRET_KEY` | `dev-secret-key...` | Clave secreta de la app |
-| `API_V1_STR` | `/api/v1` | Prefijo de la API |
-| `PROJECT_NAME` | `LogisticSystem API` | Nombre del proyecto |
-| `APP_PORT` | `8000` | Puerto de la aplicación |
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `DATABASE_URL` | *(requerido)* | Conexión PostgreSQL |
+| `SECRET_KEY` | *(requerido)* | Clave para firmar JWT |
+| `API_V1_STR` | `/api/v1` | Prefijo de rutas |
+| `PROJECT_NAME` | `Logistic System API` | Título en docs |
+| `ACCESS_TOKEN_EXPIRE_HOURS` | `24` | Expiración del JWT |
+| `CORS_ORIGINS` | `["*"]` | Orígenes permitidos |
+| `APP_PORT` | `8000` | Puerto HTTP |
 
-> Al usar Docker Compose, `DATABASE_URL` se inyecta automáticamente apuntando al contenedor de PostgreSQL.  
-> En desarrollo local debe definirse explícitamente en `.env`.
+## Agregar un nuevo módulo
+
+Crear estructura estándar y heredar de `Base`:
+
+```
+app/modules/nuevo/
+├── __init__.py
+├── enums.py       # (opcional)
+├── model.py       # class Nuevo(Base): ...
+├── schema.py      # Pydantic DTOs
+├── repository.py  # Delega en métodos de Base
+├── service.py     # Lógica de negocio
+├── router.py      # Endpoints
+└── deps.py        # Factorías Depends
+```
+
+Registrar router en `app/api/v1/api.py`. Para auditoría inyectar `AuditLogger` vía `Depends(get_audit_logger)`.

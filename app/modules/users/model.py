@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, Integer, String, func, select
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
@@ -18,5 +19,5 @@ class User(Base):
     )
 
     @classmethod
-    def find_by_email(cls, db: Session, email: str):
-        return db.scalar(select(cls).where(cls.email == email))
+    async def find_by_email(cls, db: AsyncSession, email: str):
+        return await db.scalar(select(cls).where(cls.email == email))

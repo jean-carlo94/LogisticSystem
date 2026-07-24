@@ -1,12 +1,17 @@
-from typing import Any, Sequence
+from typing import Any, AsyncGenerator, Sequence
 
 from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-engine = create_engine(settings.DATABASE_URL, echo=False)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+sync_engine = create_engine(settings.DATABASE_URL, echo=False)
+async_engine = create_async_engine(
+    settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+    echo=False,
+)
+AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
@@ -18,54 +23,57 @@ class Base(DeclarativeBase):
         return instance
 
     @classmethod
-    def get_id(cls, db: Session, entity_id: int):
-        return db.get(cls, entity_id)
+    async def get_id(cls, db: AsyncSession, entity_id: int):
+        return await db.get(cls, entity_id)
 
     @classmethod
-    def get_all(
+    async def get_all(
         cls,
-        db: Session,
+        db: AsyncSession,
         skip: int = 0,
         limit: int = 100,
         order_by=None,
     ) -> tuple[Sequence[Any], int]:
-        total = db.scalar(select(func.count()).select_from(cls))
+        from sqlalchemy import func, select
+        total = await db.scalar(select(func.count()).select_from(cls))
         stmt = select(cls).offset(skip).limit(limit)
         if order_by is not None:
             stmt = stmt.order_by(order_by)
-        items = db.scalars(stmt).all()
+        items = (await db.scalars(stmt)).all()
         return items, total
 
     @classmethod
-    def create(cls, db: Session, **kwargs) -> "Base":
+    async def create(cls, db: AsyncSession, **kwargs) -> "Base":
         instance = cls._new(**kwargs)
         db.add(instance)
-        db.commit()
-        db.refresh(instance)
+        await db.flush()
+        await db.refresh(instance)
         return instance
 
-    def save(self, db: Session) -> "Base":
+    async def save(self, db: AsyncSession) -> "Base":
         db.add(self)
-        db.commit()
-        db.refresh(self)
+        await db.flush()
+        await db.refresh(self)
         return self
 
-    def update(self, db: Session, **kwargs) -> "Base":
+    async def update(self, db: AsyncSession, **kwargs) -> "Base":
         for key, value in kwargs.items():
             setattr(self, key, value)
         db.add(self)
-        db.commit()
-        db.refresh(self)
+        await db.flush()
+        await db.refresh(self)
         return self
 
-    def delete(self, db: Session) -> None:
-        db.delete(self)
-        db.commit()
+    async def delete(self, db: AsyncSession) -> None:
+        await db.delete(self)
+        await db.flush()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as db:
+        try:
+            yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
