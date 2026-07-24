@@ -1,5 +1,3 @@
-import json
-
 from app.core.audit import AuditLogger
 from app.core.exceptions import NotFoundException
 from app.core.pagination import PaginatedResult
@@ -25,7 +23,14 @@ class ProductService:
     async def create(self, product_in: ProductCreate, user_id: int) -> Product:
         product_in.state = self._resolve_state(product_in.stock, product_in.state)
         product = await self.repo.create(**product_in.model_dump())
-        await self.audit.log_create("Product", product.id, user_id, product_in.model_dump_json())
+        log_data = {
+            "name": product.name,
+            "price": product.price,
+            "stock": product.stock,
+            "state": product.state.value if product.state else None,
+            "description": product.description,
+        }
+        await self.audit.log_create("Product", product.id, user_id, log_data)
         return product
 
     async def update(self, product_id: int, product_in: ProductUpdate, user_id: int) -> Product:
@@ -50,7 +55,7 @@ class ProductService:
             )
 
         await self.audit.log_update("Product", product.id, user_id,
-                                    product_in.model_dump_json(exclude_unset=True))
+                                    product_in.model_dump(exclude_unset=True))
         return product
 
     def _resolve_state(self, stock: int, state: ProductState) -> ProductState:
@@ -66,5 +71,5 @@ class ProductService:
             raise NotFoundException("Producto no encontrado")
 
         await self.audit.log_delete("Product", product.id, user_id,
-                                     json.dumps({"id": product.id, "name": product.name}))
+                                     {"id": product.id, "name": product.name})
         await self.repo.delete(product)

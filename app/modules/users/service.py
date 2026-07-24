@@ -1,5 +1,3 @@
-import json
-
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, ForbiddenException, UnauthorizedException
 from app.core.security import create_access_token, hash_password, verify_password
@@ -20,7 +18,7 @@ class UserService:
         user = await self.repo.create(
             email=user_in.email, hashed_password=hash_password(user_in.password),
         )
-        await self.audit.log_create("User", user.id, user.id, json.dumps({"email": user.email}))
+        await self.audit.log_create("User", user.id, user.id, {"email": user.email})
         return user
 
     async def authenticate(self, credentials: UserLogin) -> TokenResponse:
