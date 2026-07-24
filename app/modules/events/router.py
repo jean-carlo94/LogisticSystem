@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from app.core.exceptions import NotFoundException
-from app.core.pagination import PaginatedResponse
+from app.core.pagination import PaginatedResponse, PaginationParams
 from app.core.security import get_current_user
 from app.modules.events.deps import get_event_service
 from app.modules.events.schema import EventResponse
@@ -12,12 +12,11 @@ router = APIRouter(tags=["events"])
 
 @router.get("/events/", response_model=PaginatedResponse[EventResponse])
 async def list_events(
-    page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
+    pag: dict = PaginationParams,
     service: EventService = Depends(get_event_service),
     _user = Depends(get_current_user),
 ) -> PaginatedResponse[EventResponse]:
-    return await service.get_all(page=page, size=size)
+    return await service.get_all(page=pag["page"], size=pag["size"])
 
 
 @router.get("/events/{event_id}", response_model=EventResponse)
@@ -39,9 +38,8 @@ async def retrieve_event(
 async def list_entity_events(
     entity_type: str,
     entity_id: int,
-    page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
+    pag: dict = PaginationParams,
     service: EventService = Depends(get_event_service),
     _user = Depends(get_current_user),
 ) -> PaginatedResponse[EventResponse]:
-    return await service.get_by_entity(entity_type, entity_id, page=page, size=size)
+    return await service.get_by_entity(entity_type, entity_id, page=pag["page"], size=pag["size"])

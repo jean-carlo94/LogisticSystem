@@ -13,7 +13,7 @@ class EventService:
         return PaginatedResult.of(list(items), total, page, size)
 
     async def get_by_id(self, event_id: int) -> Event | None:
-        return await Event.get_id(self.repo.db, event_id)
+        return await self.repo.get_by_id(event_id)
 
     async def get_by_entity(
         self, entity_type: str, entity_id: int, page: int = 1, size: int = 20

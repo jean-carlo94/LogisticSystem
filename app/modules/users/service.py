@@ -18,7 +18,7 @@ class UserService:
         user = await self.repo.create(
             email=user_in.email, hashed_password=hash_password(user_in.password),
         )
-        await self.audit.log_create("User", user.id, user.id, {"email": user.email})
+        await self.audit.log_create("User", user.id, user.id, user)
         return user
 
     async def authenticate(self, credentials: UserLogin) -> TokenResponse:

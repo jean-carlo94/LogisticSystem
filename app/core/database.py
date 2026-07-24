@@ -1,12 +1,10 @@
 from typing import Any, AsyncGenerator, Sequence
 
-from sqlalchemy import create_engine, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-sync_engine = create_engine(settings.DATABASE_URL, echo=False)
 async_engine = create_async_engine(
     settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
     echo=False,
