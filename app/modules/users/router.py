@@ -6,7 +6,8 @@ from app.modules.users.deps import get_user_service
 from app.core.permissions import PermissionCode
 from app.modules.users.model import User
 from app.modules.users.schema import (
-    TokenResponse, UserAdminResponse, UserCreate, UserLogin, UserResponse, UserUpdate,
+    TokenResponse, UserAdminResponse, UserCreate, UserLogin,
+    UserProfileResponse, UserProfileUpdate, UserResponse, UserUpdate,
 )
 from app.modules.users.service import UserService
 
@@ -32,11 +33,21 @@ async def login(
     return await service.authenticate(credentials)
 
 
-@auth_router.get("/me", response_model=UserResponse)
+@auth_router.get("/me", response_model=UserProfileResponse)
 async def get_me(
     current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service),
+) -> UserProfileResponse:
+    return await service.get_profile(current_user)
+
+
+@auth_router.put("/me", response_model=UserResponse)
+async def update_me(
+    data: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service),
 ) -> UserResponse:
-    return current_user
+    return await service.update_profile(current_user, data)
 
 
 # ── Admin CRUD usuarios ──
@@ -63,7 +74,7 @@ async def update_user(
     user_id: int,
     data: UserUpdate,
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission("users_manage")),
+    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
     return await service.update(user_id, data, admin)
 
@@ -72,6 +83,6 @@ async def update_user(
 async def delete_user(
     user_id: int,
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission("users_manage")),
+    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
     await service.delete(user_id, admin)

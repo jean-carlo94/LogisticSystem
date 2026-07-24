@@ -23,6 +23,9 @@ class Product(Base):
     create_at: Mapped[datetime] = mapped_column(
         "createAt", server_default=func.now(), nullable=False
     )
+    update_at: Mapped[datetime] = mapped_column(
+        "updateAt", server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     @property
     def name(self) -> str:

@@ -30,5 +30,6 @@ class ProductUpdate(BaseModel):
 class ProductResponse(ProductBase):
     id: int
     create_at: datetime
+    update_at: datetime
 
     model_config = {"from_attributes": True}

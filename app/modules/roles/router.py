@@ -17,7 +17,7 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 @router.get("/permissions/", response_model=list[PermissionResponse])
 async def list_permissions(
     service: RoleService = Depends(get_role_service),
-    _user: User = Depends(get_current_user),
+    _perm: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
     return await service.list_permissions()
 
