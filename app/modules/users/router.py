@@ -8,7 +8,7 @@ from app.modules.users.deps import get_user_service
 from app.core.permissions import PermissionCode
 from app.modules.users.model import User
 from app.modules.users.schema import (
-    TokenResponse, UserAdminResponse, UserCreate, UserLogin,
+    RoleInfo, TokenResponse, UserAdminResponse, UserAssignRole, UserCreate, UserLogin,
     UserProfileResponse, UserProfileUpdate, UserResponse, UserUpdate,
 )
 from app.modules.users.service import UserService
@@ -88,3 +88,22 @@ async def delete_user(
     admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
     await service.delete(user_id, admin)
+
+
+@users_router.get("/{user_id}/roles", response_model=list[RoleInfo])
+async def get_user_roles(
+    user_id: int,
+    service: UserService = Depends(get_user_service),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+):
+    return await service.get_user_roles(user_id)
+
+
+@users_router.post("/{user_id}/roles", status_code=status.HTTP_204_NO_CONTENT)
+async def assign_role_to_user(
+    user_id: int,
+    data: UserAssignRole,
+    service: UserService = Depends(get_user_service),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+):
+    await service.assign_role(user_id, data.role_id)

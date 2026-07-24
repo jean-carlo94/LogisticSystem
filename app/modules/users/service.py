@@ -49,33 +49,22 @@ class UserService:
             raise NotFoundException("Usuario no encontrado")
         return user
 
+    async def get_user_roles(self, user_id: int) -> list[RoleInfo]:
+        if not await self.repo.get_by_id(user_id):
+            raise NotFoundException("Usuario no encontrado")
+        roles = await self.repo.get_user_roles(user_id)
+        return [RoleInfo(id=r.id, name=r.name) for r in roles]
+
+    async def assign_role(self, user_id: int, role_id: int) -> None:
+        if not await self.repo.get_by_id(user_id):
+            raise NotFoundException("Usuario no encontrado")
+        if not await self.repo.role_exists(role_id):
+            raise NotFoundException("Rol no encontrado")
+        await self.repo.assign_role(user_id, role_id)
+
     async def get_profile(self, user: User) -> dict:
-        from sqlalchemy import select
-        from app.modules.roles.model import Permission, Role, RolePermission, UserRole
-
-        result = await self.repo.db.scalars(
-            select(Role).join(UserRole, UserRole.role_id == Role.id)
-            .where(UserRole.user_id == user.id)
-        )
-        roles = result.all()
-
-        perm_codes: list[str] = []
-        if user.is_super_admin:
-            perms = await self.repo.db.scalars(select(Permission))
-            perm_codes = [p.code for p in perms]
-        elif roles:
-            perm_ids = set()
-            for role in roles:
-                rps = await self.repo.db.scalars(
-                    select(RolePermission).where(RolePermission.role_id == role.id)
-                )
-                for rp in rps:
-                    perm_ids.add(rp.permission_id)
-            if perm_ids:
-                perms = await self.repo.db.scalars(
-                    select(Permission).where(Permission.id.in_(perm_ids))
-                )
-                perm_codes = [p.code for p in perms]
+        roles = await self.repo.get_user_roles(user.id)
+        permissions = await self.repo.get_user_permissions(user.id, user.is_super_admin)
 
         return {
             "id": user.id,
@@ -90,7 +79,7 @@ class UserService:
             "created_at": user.created_at,
             "updated_at": user.updated_at,
             "roles": [RoleInfo(id=r.id, name=r.name) for r in roles],
-            "permissions": perm_codes,
+            "permissions": permissions,
         }
 
     async def update_profile(self, user: User, data: UserProfileUpdate) -> User:
