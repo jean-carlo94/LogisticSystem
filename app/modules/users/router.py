@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, status
 
 from app.core.pagination import PaginatedResponse

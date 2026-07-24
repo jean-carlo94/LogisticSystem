@@ -1,6 +1,6 @@
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResult
-from app.modules.roles.model import Permission, Role
+from app.modules.roles.model import Role
 from app.modules.roles.repository import PermissionRepository, RoleRepository, UserRoleRepository
 from app.modules.roles.schema import RoleCreate, RoleUpdate
 

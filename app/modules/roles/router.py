@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, status
 
 from app.core.pagination import PaginatedResponse
@@ -9,7 +13,9 @@ from app.modules.roles.schema import (
 )
 from app.modules.roles.service import RoleService
 from app.core.permissions import PermissionCode
-from app.modules.users.model import User
+
+if TYPE_CHECKING:
+    from app.modules.users.model import User
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -25,7 +31,7 @@ async def list_permissions(
 @router.get("/", response_model=PaginatedResponse[RoleResponse])
 async def list_roles(
     service: RoleService = Depends(get_role_service),
-    _user: User = Depends(get_current_user),
+    _user: "User" = Depends(get_current_user),
 ):
     return await service.get_all()
 
@@ -72,7 +78,7 @@ async def assign_permissions(
 async def get_role_permissions(
     role_id: int,
     service: RoleService = Depends(get_role_service),
-    _user: User = Depends(get_current_user),
+    _user: "User" = Depends(get_current_user),
 ):
     return await service.get_permissions(role_id)
 

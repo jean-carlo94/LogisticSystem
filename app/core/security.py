@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import ForbiddenException, UnauthorizedException
+from app.core.permissions import PermissionCode
 
 if TYPE_CHECKING:
     from app.modules.users.model import User
@@ -54,7 +55,7 @@ async def get_current_user(
     return user
 
 
-def require_permission(permission_code: str):
+def require_permission(permission_code: PermissionCode):
     async def dependency(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),

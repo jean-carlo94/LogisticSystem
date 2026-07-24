@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends
 
 from app.core.exceptions import NotFoundException
@@ -8,6 +12,9 @@ from app.modules.events.schema import EventResponse
 from app.modules.events.service import EventService
 from app.core.permissions import PermissionCode
 
+if TYPE_CHECKING:
+    from app.modules.users.model import User
+
 router = APIRouter(tags=["events"])
 
 
@@ -15,7 +22,7 @@ router = APIRouter(tags=["events"])
 async def list_events(
     pag: dict = PaginationParams,
     service: EventService = Depends(get_event_service),
-    _perm = Depends(require_permission(PermissionCode.EVENTS_READ)),
+    _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
 ) -> PaginatedResponse[EventResponse]:
     return await service.get_all(page=pag["page"], size=pag["size"])
 
@@ -24,7 +31,7 @@ async def list_events(
 async def retrieve_event(
     event_id: int,
     service: EventService = Depends(get_event_service),
-    _perm = Depends(require_permission(PermissionCode.EVENTS_READ)),
+    _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
 ) -> EventResponse:
     event = await service.get_by_id(event_id)
     if not event:
@@ -41,6 +48,6 @@ async def list_entity_events(
     entity_id: int,
     pag: dict = PaginationParams,
     service: EventService = Depends(get_event_service),
-    _perm = Depends(require_permission(PermissionCode.EVENTS_READ)),
+    _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
 ) -> PaginatedResponse[EventResponse]:
     return await service.get_by_entity(entity_type, entity_id, page=pag["page"], size=pag["size"])
