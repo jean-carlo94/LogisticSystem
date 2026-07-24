@@ -1,13 +1,9 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.repository import BaseRepository
 from app.modules.users.model import User
 
 
-class UserRepository:
-    def __init__(self, db: AsyncSession):
-        self.db = db
+class UserRepository(BaseRepository):
+    model = User
 
     async def find_by_email(self, email: str):
         return await User.find_by_email(self.db, email)
-
-    async def create(self, **kwargs):
-        return await User.create(self.db, **kwargs)
