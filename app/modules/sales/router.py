@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from fastapi import APIRouter, Depends, status
+
+from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
+from app.core.security import require_permission
+from app.modules.sales.deps import get_sale_service
+from app.modules.sales.schema import SaleCreate, SaleDetailResponse, SaleResponse
+from app.modules.sales.service import SaleService
+from app.core.permissions import PermissionCode
+
+if TYPE_CHECKING:
+    from app.modules.users.model import User
+
+router = APIRouter(prefix="/sales", tags=["sales"])
+
+
+@router.get("/", response_model=PaginatedResponse[SaleResponse])
+async def list_sales(
+    pag: dict = PaginationParams,
+    filters: dict = FilterParams,
+    service: SaleService = Depends(get_sale_service),
+    _perm: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+):
+    return await service.get_all(
+        page=pag["page"], size=pag["size"], filters=filters or None
+    )
+
+
+@router.post(
+    "/", response_model=SaleDetailResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_sale(
+    data: SaleCreate,
+    service: SaleService = Depends(get_sale_service),
+    user: "User" = Depends(require_permission(PermissionCode.SALES_CREATE)),
+):
+    return await service.create(data, user.id)
+
+
+@router.get("/{sale_id}", response_model=SaleDetailResponse)
+async def get_sale_detail(
+    sale_id: int,
+    service: SaleService = Depends(get_sale_service),
+    _perm: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+):
+    return await service.get_by_id(sale_id)

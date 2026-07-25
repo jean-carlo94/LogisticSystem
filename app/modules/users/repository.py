@@ -62,3 +62,11 @@ class UserRepository(BaseRepository):
     async def role_exists(self, role_id: int) -> bool:
         from app.modules.roles.model import Role
         return await self.db.get(Role, role_id) is not None
+
+    async def has_sales(self, user_id: int) -> bool:
+        from app.modules.sales.model import Sale
+
+        s = await self.db.scalar(
+            select(Sale.id).where(Sale.created_by == user_id).limit(1)
+        )
+        return s is not None

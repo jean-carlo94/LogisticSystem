@@ -10,11 +10,17 @@
     "shelves_create": "Crear estanterías",
     "shelves_read": "Ver estanterías",
     "shelves_update": "Actualizar estanterías",
-    "shelves_delete": "Eliminar estanterías"
+    "shelves_delete": "Eliminar estanterías",
+    "categories_create": "Crear categorías",
+    "categories_read": "Ver categorías",
+    "categories_update": "Actualizar categorías",
+    "categories_delete": "Eliminar categorías",
+    "sales_create": "Crear ventas",
+    "sales_read": "Ver ventas"
   },
   "roles": {
-    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage", "shelves_create", "shelves_read", "shelves_update", "shelves_delete"],
-    "Operator": ["products_create", "products_read", "products_update", "shelves_read", "shelves_update"],
-    "Viewer": ["products_read", "shelves_read"]
+    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage", "shelves_create", "shelves_read", "shelves_update", "shelves_delete", "categories_create", "categories_read", "categories_update", "categories_delete", "sales_create", "sales_read"],
+    "Operator": ["products_create", "products_read", "products_update", "shelves_read", "shelves_update", "categories_read", "sales_create", "sales_read"],
+    "Viewer": ["products_read", "shelves_read", "categories_read", "sales_read"]
   }
 }

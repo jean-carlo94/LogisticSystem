@@ -121,6 +121,11 @@ class UserService:
         if not user:
             raise NotFoundException("Usuario no encontrado")
 
+        if await self.repo.has_sales(user_id):
+            raise ConflictException(
+                "No se puede eliminar un usuario con historial de ventas"
+            )
+
         if user.image_path:
             storage = get_storage()
             await storage.delete(user.image_path)

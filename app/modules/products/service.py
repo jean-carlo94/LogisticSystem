@@ -7,7 +7,9 @@ from app.core.storage import generate_filename, get_storage
 from app.modules.products.enums import ProductState
 from app.modules.products.model import Product
 from app.modules.products.repository import ProductRepository
-from app.modules.products.schema import ProductCreate, ProductQRResponse, ProductUpdate, ShelfInfo
+from app.modules.products.schema import (
+    ProductCreate, ProductLocationResponse, ProductQRResponse, ProductUpdate, ShelfInfo,
+)
 
 
 class ProductService:
@@ -31,8 +33,18 @@ class ProductService:
             if existing:
                 raise ConflictException("El código de barras ya está en uso")
 
-        product_in.state = self._resolve_state(product_in.stock, product_in.state)
-        product = await self.repo.create(**product_in.model_dump())
+        category_ids = product_in.category_ids
+        data = product_in.model_dump(exclude={"category_ids"})
+
+        resolved = self._resolve_state(data["stock"], data["state"])
+        data["state"] = resolved
+
+        product = await self.repo.create(**data)
+
+        if category_ids:
+            await self.repo.set_product_categories(product.id, category_ids)
+            product = await self.repo.get_by_id_with_categories(product.id)
+
         await self.audit.log_create("Product", product.id, user_id, product)
         return product
 
@@ -42,6 +54,7 @@ class ProductService:
             raise NotFoundException("Producto no encontrado")
 
         update_data = product_in.model_dump(exclude_unset=True)
+        category_ids = update_data.pop("category_ids", None)
 
         if "barcode" in update_data and update_data["barcode"] != product.barcode:
             if update_data["barcode"]:
@@ -58,6 +71,10 @@ class ProductService:
             update_data["state"] = resolved_state
 
         await self.repo.update(product, **update_data)
+
+        if category_ids is not None:
+            await self.repo.set_product_categories(product.id, category_ids)
+            product = await self.repo.get_by_id_with_categories(product.id)
 
         if product.state != old_state:
             await self.audit.log_status_change(
@@ -78,6 +95,11 @@ class ProductService:
         product = await self.repo.get_by_id(product_id)
         if not product:
             raise NotFoundException("Producto no encontrado")
+
+        if await self.repo.has_sale_history(product_id):
+            raise ConflictException(
+                "No se puede eliminar un producto con historial de ventas"
+            )
 
         if product.image_path:
             storage = get_storage()
@@ -136,3 +158,23 @@ class ProductService:
             barcode=product.barcode,
             shelf=shelf,
         )
+
+    async def get_locations(
+        self, product_id: int
+    ) -> list[ProductLocationResponse]:
+        product = await self.repo.get_by_id(product_id)
+        if not product:
+            raise NotFoundException("Producto no encontrado")
+
+        rows = await self.repo.get_product_locations(product_id)
+        return [
+            ProductLocationResponse(
+                shelf_id=si.shelf_id,
+                code=shelf.code if shelf else "?",
+                aisle=shelf.aisle if shelf else "",
+                row=shelf.row if shelf else 0,
+                level=shelf.level if shelf else 0,
+                quantity=si.quantity,
+            )
+            for si, shelf in rows
+        ]

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Enum, Float, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.modules.products.enums import ProductState
@@ -103,3 +103,7 @@ class Product(Base):
         if not value:
             value = None
         self._barcode = value
+
+    categories: Mapped[list["Category"]] = relationship(
+        "Category", secondary="product_categories", lazy="selectin"
+    )

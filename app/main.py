@@ -15,7 +15,7 @@ from app.core.rate_limit import rate_limit_middleware
 from app.core.seed import seed_defaults
 
 
-STATIC_DIR = Path(settings.STORAGE_PATH).parent
+STATIC_DIR = Path(settings.STORAGE_PATH)
 
 
 @asynccontextmanager
@@ -31,10 +31,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+origins = [str(o).strip() for o in settings.CORS_ORIGINS]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=origins if origins else ["*"],
+    allow_credentials=True if origins else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

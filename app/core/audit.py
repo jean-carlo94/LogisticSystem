@@ -30,7 +30,11 @@ class AuditLogger:
     async def _log(self, action: ActionType, entity_type: str, entity_id: int,
                    user_id: int, data: Any) -> None:
         if hasattr(data, "model_dump"):
-            data = data.model_dump()
+            dumped = data.model_dump()
+            if isinstance(dumped, dict):
+                dumped = {k: v for k, v in dumped.items()
+                          if k not in ("hashed_password",)}
+            data = dumped
         elif hasattr(data, "__table__"):
             mapper = class_mapper(type(data))
             data = {
@@ -39,6 +43,8 @@ class AuditLogger:
                 if prop.key not in ("hashed_password",)
             }
         description = data if isinstance(data, str) else json.dumps(data, default=str)
+        if len(description) > 65536:
+            description = description[:65536] + "...[truncated]"
         await Event.create(
             self._db,
             entity_type=entity_type,

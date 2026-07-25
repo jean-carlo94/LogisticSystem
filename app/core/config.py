@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_HOURS: int = 24
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Logistic System API"
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = []
     RATE_LIMIT_REQUESTS: int = 1000
     RATE_LIMIT_WINDOW: int = 60
 

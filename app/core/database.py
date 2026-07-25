@@ -111,7 +111,8 @@ class Base(DeclarativeBase):
                     stmt = stmt.where(sa_false())
                     continue
                 if cls._is_string_column(col):
-                    stmt = stmt.where(col.ilike(f"%{coerced}%"))
+                    safe = str(coerced).replace("%", "\\%").replace("_", "\\_")
+                    stmt = stmt.where(col.ilike(f"%{safe}%"))
                 else:
                     stmt = stmt.where(col == coerced)
 

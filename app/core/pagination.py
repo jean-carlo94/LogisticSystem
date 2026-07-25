@@ -51,7 +51,7 @@ def get_filters(request: Request) -> dict[str, str]:
     params = dict(request.query_params)
     for key in RESERVED_PARAMS:
         params.pop(key, None)
-    return {k: v for k, v in params.items() if v}
+    return {k: v for k, v in params.items() if v != ""}
 
 
 PaginationParams = Depends(get_pagination)

@@ -21,7 +21,7 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    pass
+    category_ids: list[int] = []
 
 
 class ProductUpdate(BaseModel):
@@ -35,6 +35,14 @@ class ProductUpdate(BaseModel):
     width_cm: float | None = Field(default=None, ge=0)
     height_cm: float | None = Field(default=None, ge=0)
     depth_cm: float | None = Field(default=None, ge=0)
+    category_ids: list[int] | None = None
+
+
+class CategoryInfo(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
 
 
 class ProductResponse(ProductBase):
@@ -43,6 +51,7 @@ class ProductResponse(ProductBase):
     image_url: str | None = None
     create_at: datetime
     update_at: datetime
+    categories: list[CategoryInfo] = []
 
     model_config = {"from_attributes": True}
 
@@ -65,3 +74,14 @@ class ProductQRResponse(BaseModel):
     name: str
     barcode: str | None = None
     shelf: ShelfInfo | None = None
+
+
+class ProductLocationResponse(BaseModel):
+    shelf_id: int
+    code: str
+    aisle: str
+    row: int
+    level: int
+    quantity: int
+
+    model_config = {"from_attributes": True}

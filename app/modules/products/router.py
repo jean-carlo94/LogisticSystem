@@ -9,7 +9,8 @@ from app.core.pagination import FilterParams, PaginatedResponse, PaginationParam
 from app.core.security import require_permission
 from app.modules.products.deps import get_product_service
 from app.modules.products.schema import (
-    ProductCreate, ProductQRResponse, ProductResponse, ProductUpdate,
+    ProductCreate, ProductLocationResponse, ProductQRResponse,
+    ProductResponse, ProductUpdate,
 )
 from app.modules.products.service import ProductService
 from app.core.permissions import PermissionCode
@@ -100,3 +101,15 @@ async def get_product_qr(
     _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
 ) -> ProductQRResponse:
     return await service.get_qr_data(product_id)
+
+
+@router.get(
+    "/{product_id}/locations",
+    response_model=list[ProductLocationResponse],
+)
+async def get_product_locations(
+    product_id: int,
+    service: ProductService = Depends(get_product_service),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+) -> list[ProductLocationResponse]:
+    return await service.get_locations(product_id)

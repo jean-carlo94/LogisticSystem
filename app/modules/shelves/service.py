@@ -114,6 +114,11 @@ class ShelfService:
         if items:
             raise ConflictException("No se puede eliminar una estantería con productos asignados")
 
+        if await self.item_repo.has_sale_items(shelf_id):
+            raise ConflictException(
+                "No se puede eliminar una estantería con historial de ventas"
+            )
+
         await self.audit.log_delete("Shelf", shelf.id, user_id, shelf)
         await self.shelf_repo.delete(shelf)
 
@@ -228,22 +233,32 @@ class ShelfService:
 
     async def _get_total_weight(self, shelf_id: int, exclude_item_id: int | None = None) -> float:
         items = await self.item_repo.get_items_by_shelf(shelf_id)
+        product_ids = list({i.product_id for i in items if not exclude_item_id or i.id != exclude_item_id})
+        if not product_ids:
+            return 0.0
+        products = await self.item_repo.get_products_by_ids(product_ids)
+        products_map = {p.id: p for p in products}
         total = 0.0
         for item in items:
             if exclude_item_id and item.id == exclude_item_id:
                 continue
-            product = await self.item_repo.get_product_by_id(item.product_id)
+            product = products_map.get(item.product_id)
             if product:
                 total += product.weight_kg * item.quantity
         return total
 
     async def _get_total_volume(self, shelf_id: int, exclude_item_id: int | None = None) -> float:
         items = await self.item_repo.get_items_by_shelf(shelf_id)
+        product_ids = list({i.product_id for i in items if not exclude_item_id or i.id != exclude_item_id})
+        if not product_ids:
+            return 0.0
+        products = await self.item_repo.get_products_by_ids(product_ids)
+        products_map = {p.id: p for p in products}
         total = 0.0
         for item in items:
             if exclude_item_id and item.id == exclude_item_id:
                 continue
-            product = await self.item_repo.get_product_by_id(item.product_id)
+            product = products_map.get(item.product_id)
             if product:
                 product_volume = product.width_cm * product.height_cm * product.depth_cm
                 total += product_volume * item.quantity

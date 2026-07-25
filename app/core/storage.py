@@ -28,7 +28,11 @@ class LocalStorageBackend(StorageBackend):
         full_path = self.base_dir / relative_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         content = await file.read()
-        full_path.write_bytes(content)
+        if len(content) > 10 * 1024 * 1024:
+            raise ValueError("El archivo excede el límite de 10MB")
+        import aiofiles
+        async with aiofiles.open(full_path, "wb") as f:
+            await f.write(content)
         return relative_path
 
     async def delete(self, relative_path: str) -> None:
