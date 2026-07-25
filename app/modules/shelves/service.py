@@ -133,6 +133,7 @@ class ShelfService:
         existing = await self.item_repo.get_by_shelf_product(shelf_id, data.product_id)
         if existing:
             new_qty = existing.quantity + data.quantity
+            await self._validate_stock(product.id, new_qty, exclude_item_id=existing.id)
             other_weight = await self._get_total_weight(shelf_id, exclude_item_id=existing.id)
             other_volume = await self._get_total_volume(shelf_id, exclude_item_id=existing.id)
             await self._validate_capacity(shelf, product, new_qty, other_weight, other_volume)
@@ -140,6 +141,7 @@ class ShelfService:
             await self.audit.log_update("ShelfItem", item.id, user_id, {"quantity": new_qty})
             return item
 
+        await self._validate_stock(product.id, data.quantity)
         await self._validate_capacity(shelf, product, data.quantity)
 
         item = await self.item_repo.create(shelf_id, data.product_id, data.quantity)
@@ -162,6 +164,7 @@ class ShelfService:
             if not product:
                 raise NotFoundException("Producto no encontrado")
 
+            await self._validate_stock(item.product_id, data.quantity, exclude_item_id=item_id)
             other_weight = await self._get_total_weight(shelf_id, exclude_item_id=item_id)
             other_volume = await self._get_total_volume(shelf_id, exclude_item_id=item_id)
             await self._validate_capacity(shelf, product, data.quantity, other_weight, other_volume)
@@ -249,6 +252,27 @@ class ShelfService:
                 product_volume = product.width_cm * product.height_cm * product.depth_cm
                 total += product_volume * item.quantity
         return total
+
+    async def _get_total_assigned(self, product_id: int, exclude_item_id: int | None = None) -> int:
+        items = await self.item_repo.get_items_by_product(product_id)
+        total = 0
+        for item in items:
+            if exclude_item_id and item.id == exclude_item_id:
+                continue
+            total += item.quantity
+        return total
+
+    async def _validate_stock(self, product_id: int, quantity: int, exclude_item_id: int | None = None) -> None:
+        product = await ShelfService._get_product(self.shelf_repo.db, product_id)
+        if not product:
+            return
+        assigned = await self._get_total_assigned(product_id, exclude_item_id=exclude_item_id)
+        total = assigned + quantity
+        if total > product.stock:
+            raise ValidationException(
+                f"Stock insuficiente: {product.stock} en inventario, "
+                f"{assigned} ya asignados, {quantity} solicitados = {total} total"
+            )
 
     @staticmethod
     async def _get_product(db, product_id: int):

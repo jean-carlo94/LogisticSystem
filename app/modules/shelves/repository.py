@@ -41,6 +41,12 @@ class ShelfItemRepository:
         )
         return result.all()
 
+    async def get_items_by_product(self, product_id: int):
+        result = await self.db.scalars(
+            select(ShelfItem).where(ShelfItem.product_id == product_id)
+        )
+        return result.all()
+
     async def create(self, shelf_id: int, product_id: int, quantity: int) -> ShelfItem:
         item = ShelfItem(shelf_id=shelf_id, product_id=product_id, quantity=quantity)
         self.db.add(item)
