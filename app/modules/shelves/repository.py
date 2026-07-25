@@ -18,14 +18,8 @@ class ShelfRepository(BaseRepository):
         return result.all()
 
 
-class ShelfItemRepository:
+class ShelfItemRepository(BaseRepository):
     model = ShelfItem
-
-    def __init__(self, db: AsyncSession):
-        self.db = db
-
-    async def get_by_id(self, item_id: int) -> ShelfItem | None:
-        return await self.db.get(ShelfItem, item_id)
 
     async def get_by_shelf_product(self, shelf_id: int, product_id: int) -> ShelfItem | None:
         return await self.db.scalar(
@@ -47,20 +41,13 @@ class ShelfItemRepository:
         )
         return result.all()
 
-    async def create(self, shelf_id: int, product_id: int, quantity: int) -> ShelfItem:
-        item = ShelfItem(shelf_id=shelf_id, product_id=product_id, quantity=quantity)
-        self.db.add(item)
-        await self.db.flush()
-        await self.db.refresh(item)
-        return item
+    async def get_product_by_id(self, product_id: int):
+        from app.modules.products.model import Product
+        return await self.db.scalar(select(Product).where(Product.id == product_id))
 
-    async def update(self, item: ShelfItem, quantity: int) -> ShelfItem:
-        item.quantity = quantity
-        self.db.add(item)
-        await self.db.flush()
-        await self.db.refresh(item)
-        return item
-
-    async def delete(self, item: ShelfItem) -> None:
-        await self.db.delete(item)
-        await self.db.flush()
+    async def get_products_by_ids(self, product_ids: list[int]):
+        from app.modules.products.model import Product
+        result = await self.db.scalars(
+            select(Product).where(Product.id.in_(product_ids))
+        )
+        return result.all()

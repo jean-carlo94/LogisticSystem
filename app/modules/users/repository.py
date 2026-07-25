@@ -29,13 +29,13 @@ class UserRepository(BaseRepository):
         if not roles:
             return []
 
+        role_ids = [r.id for r in roles]
         perm_ids = set()
-        for role in roles:
-            rps = await self.db.scalars(
-                select(RolePermission).where(RolePermission.role_id == role.id)
-            )
-            for rp in rps:
-                perm_ids.add(rp.permission_id)
+        rps = await self.db.scalars(
+            select(RolePermission).where(RolePermission.role_id.in_(role_ids))
+        )
+        for rp in rps:
+            perm_ids.add(rp.permission_id)
 
         if not perm_ids:
             return []

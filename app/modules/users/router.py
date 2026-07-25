@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
-from app.core.pagination import FilterParams, PaginatedResponse
+from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import get_current_user, require_permission
 from app.modules.users.deps import get_user_service
 from app.core.permissions import PermissionCode
@@ -73,6 +73,7 @@ async def delete_avatar(
 
 @users_router.get("/", response_model=PaginatedResponse[UserAdminResponse])
 async def list_users(
+    pag: dict = PaginationParams,
     email: str | None = Query(default=None, description="Email (único)"),
     filters: dict = FilterParams,
     service: UserService = Depends(get_user_service),
@@ -81,7 +82,7 @@ async def list_users(
     merged = dict(filters)
     if email is not None:
         merged["email"] = email
-    return await service.get_all(filters=merged or None)
+    return await service.get_all(page=pag["page"], size=pag["size"], filters=merged or None)
 
 
 @users_router.get("/{user_id}", response_model=UserAdminResponse)

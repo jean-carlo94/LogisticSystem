@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.core.pagination import FilterParams, PaginatedResponse
+from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import get_current_user, require_permission
 from app.modules.roles.deps import get_role_service
 from app.modules.roles.schema import (
@@ -30,6 +30,7 @@ async def list_permissions(
 
 @router.get("/", response_model=PaginatedResponse[RoleResponse])
 async def list_roles(
+    pag: dict = PaginationParams,
     name: str | None = Query(default=None, description="Nombre del rol (único)"),
     filters: dict = FilterParams,
     service: RoleService = Depends(get_role_service),
@@ -38,7 +39,7 @@ async def list_roles(
     merged = dict(filters)
     if name is not None:
         merged["name"] = name
-    return await service.get_all(filters=merged or None)
+    return await service.get_all(page=pag["page"], size=pag["size"], filters=merged or None)
 
 
 @router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)

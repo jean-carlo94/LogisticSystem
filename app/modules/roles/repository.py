@@ -12,14 +12,15 @@ class RoleRepository(BaseRepository):
         return await self.db.scalar(select(Role).where(Role.name == name))
 
     async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> None:
-        for pid in permission_ids:
-            existing = await self.db.scalar(
-                select(RolePermission).where(
-                    RolePermission.role_id == role_id,
-                    RolePermission.permission_id == pid,
-                )
+        existing = await self.db.scalars(
+            select(RolePermission.permission_id).where(
+                RolePermission.role_id == role_id,
+                RolePermission.permission_id.in_(permission_ids),
             )
-            if not existing:
+        )
+        existing_ids = set(existing)
+        for pid in permission_ids:
+            if pid not in existing_ids:
                 rp = RolePermission(role_id=role_id, permission_id=pid)
                 self.db.add(rp)
         await self.db.flush()
@@ -63,3 +64,7 @@ class UserRoleRepository:
             ur = UserRole(user_id=user_id, role_id=role_id)
             self.db.add(ur)
             await self.db.flush()
+
+    async def user_exists(self, user_id: int) -> bool:
+        from app.modules.users.model import User
+        return await self.db.get(User, user_id) is not None

@@ -1,7 +1,6 @@
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResult
-from app.modules.products.model import Product
 from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.shelves.repository import ShelfItemRepository, ShelfRepository
 from app.modules.shelves.schema import (
@@ -40,10 +39,7 @@ class ShelfService:
         product_ids = [i.product_id for i in items]
         products_map = {}
         if product_ids:
-            from sqlalchemy import select
-            products = await self.shelf_repo.db.scalars(
-                select(Product).where(Product.id.in_(product_ids))
-            )
+            products = await self.item_repo.get_products_by_ids(product_ids)
             products_map = {p.id: p for p in products}
 
         current_weight = 0.0
@@ -126,7 +122,7 @@ class ShelfService:
         if not shelf:
             raise NotFoundException("Estantería no encontrada")
 
-        product = await ShelfService._get_product(self.shelf_repo.db, data.product_id)
+        product = await self.item_repo.get_product_by_id(data.product_id)
         if not product:
             raise NotFoundException("Producto no encontrado")
 
@@ -137,14 +133,14 @@ class ShelfService:
             other_weight = await self._get_total_weight(shelf_id, exclude_item_id=existing.id)
             other_volume = await self._get_total_volume(shelf_id, exclude_item_id=existing.id)
             await self._validate_capacity(shelf, product, new_qty, other_weight, other_volume)
-            item = await self.item_repo.update(existing, new_qty)
+            item = await self.item_repo.update(existing, quantity=new_qty)
             await self.audit.log_update("ShelfItem", item.id, user_id, {"quantity": new_qty})
             return item
 
         await self._validate_stock(product.id, data.quantity)
         await self._validate_capacity(shelf, product, data.quantity)
 
-        item = await self.item_repo.create(shelf_id, data.product_id, data.quantity)
+        item = await self.item_repo.create(shelf_id=shelf_id, product_id=data.product_id, quantity=data.quantity)
         await self.audit.log_create("ShelfItem", item.id, user_id, item)
         return item
 
@@ -160,7 +156,7 @@ class ShelfService:
             raise NotFoundException("Ítem no encontrado en esta estantería")
 
         if data.quantity > 0:
-            product = await ShelfService._get_product(self.shelf_repo.db, item.product_id)
+            product = await self.item_repo.get_product_by_id(item.product_id)
             if not product:
                 raise NotFoundException("Producto no encontrado")
 
@@ -174,7 +170,7 @@ class ShelfService:
             await self.audit.log_delete("ShelfItem", item_id, user_id, item)
             return item
 
-        item = await self.item_repo.update(item, data.quantity)
+        item = await self.item_repo.update(item, quantity=data.quantity)
         await self.audit.log_update("ShelfItem", item_id, user_id, {"quantity": data.quantity})
         return item
 
@@ -236,7 +232,7 @@ class ShelfService:
         for item in items:
             if exclude_item_id and item.id == exclude_item_id:
                 continue
-            product = await ShelfService._get_product(self.shelf_repo.db, item.product_id)
+            product = await self.item_repo.get_product_by_id(item.product_id)
             if product:
                 total += product.weight_kg * item.quantity
         return total
@@ -247,7 +243,7 @@ class ShelfService:
         for item in items:
             if exclude_item_id and item.id == exclude_item_id:
                 continue
-            product = await ShelfService._get_product(self.shelf_repo.db, item.product_id)
+            product = await self.item_repo.get_product_by_id(item.product_id)
             if product:
                 product_volume = product.width_cm * product.height_cm * product.depth_cm
                 total += product_volume * item.quantity
@@ -263,7 +259,7 @@ class ShelfService:
         return total
 
     async def _validate_stock(self, product_id: int, quantity: int, exclude_item_id: int | None = None) -> None:
-        product = await ShelfService._get_product(self.shelf_repo.db, product_id)
+        product = await self.item_repo.get_product_by_id(product_id)
         if not product:
             return
         assigned = await self._get_total_assigned(product_id, exclude_item_id=exclude_item_id)
@@ -273,9 +269,3 @@ class ShelfService:
                 f"Stock insuficiente: {product.stock} en inventario, "
                 f"{assigned} ya asignados, {quantity} solicitados = {total} total"
             )
-
-    @staticmethod
-    async def _get_product(db, product_id: int):
-        from sqlalchemy import select
-        from app.modules.products.model import Product
-        return await db.scalar(select(Product).where(Product.id == product_id))

@@ -18,7 +18,7 @@ class Role(Base):
     __tablename__ = "roles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    _name: Mapped[str] = mapped_column("name", String(100), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(
         "createdAt", server_default=func.now(), nullable=False
@@ -26,6 +26,14 @@ class Role(Base):
     updated_at: Mapped[datetime] = mapped_column(
         "updatedAt", server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        self._name = value.strip()
 
 
 class RolePermission(Base):

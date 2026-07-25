@@ -10,8 +10,8 @@ class Shelf(Base):
     __tablename__ = "shelves"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    _name: Mapped[str] = mapped_column("name", String(100), nullable=False)
+    _code: Mapped[str] = mapped_column("code", String(50), unique=True, nullable=False)
     aisle: Mapped[str] = mapped_column(String(20), default="", nullable=False)
     row: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -25,6 +25,22 @@ class Shelf(Base):
     updated_at: Mapped[datetime] = mapped_column(
         "updatedAt", server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        self._name = value.strip()
+
+    @property
+    def code(self) -> str:
+        return self._code
+
+    @code.setter
+    def code(self, value: str):
+        self._code = value.strip()
 
 
 class ShelfItem(Base):

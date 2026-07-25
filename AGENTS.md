@@ -57,8 +57,19 @@ Router → Depends(deps.py) → Service → Repository → Base/Model
 ### FORBIDDEN patterns
 
 ```python
-# ❌ Service accessing db directly
+# ❌ Service accessing db directly — this is the #1 violation
+#    All DB access goes through repository methods, NEVER through repo.db
 result = await self.repo.db.scalars(select(...))
+product = await User.get_id(self.repo.db, user_id)
+
+# ❌ Static helper in service that takes db as parameter — bypasses repository layer
+@staticmethod
+async def _get_product(db, product_id):  # ❌ service level, takes db directly
+    return await db.scalar(select(Product).where(...))
+
+# ❌ Inline SQLAlchemy imports in service (select, func, etc.)
+#    These only belong in repository.py or model.py
+from sqlalchemy import select  # ❌ in service.py
 
 # ❌ Router injecting multiple services from different modules
 def endpoint(service_a: ServiceA, service_b: ServiceB): ...
@@ -68,6 +79,22 @@ def endpoint(db: Session = Depends(get_db)): ...
 
 # ❌ Service importing from another module's service (creates coupling)
 from app.modules.roles.service import RoleService
+
+# ❌ List endpoint without PaginationParams — pagination silently broken
+@router.get("/")
+async def list_items(
+    filters: dict = FilterParams,  # has pagination? NO pag param!
+    ...
+):
+
+# ❌ AuditLogger missing from service that does CRUD operations
+class MyService:
+    def __init__(self, repo):  # ❌ no audit parameter
+        ...
+
+# ❌ N+1 queries — loop over DB results issuing separate queries
+for role in roles:
+    perms = await self.db.scalars(select(...).where(role_id == role.id))  # ❌
 ```
 
 ### ALLOWED patterns
@@ -76,14 +103,44 @@ from app.modules.roles.service import RoleService
 # ✅ Service calls repo method
 roles = await self.repo.get_user_roles(user_id)
 
-# ✅ Service calls model classmethod (via repo or directly for cross-model lookups)
-if not await self.repo.role_exists(role_id): ...
+# ✅ Cross-module data access through repository — add the method there
+# Shelf service needs Product data → add method to ShelfItemRepository
+product = await self.item_repo.get_product_by_id(product_id)
+
+# ✅ Cross-module access through repository (not service!)
+# RoleRepository needs to check if user exists → add to UserRoleRepository
+if not await self.user_role_repo.user_exists(user_id): ...
 
 # ✅ Router only depends on ONE service from its own module
 def endpoint(service: MyService = Depends(get_my_service)): ...
 
-# ✅ Cross-module access only through repository or model classmethods
-# If UserService needs Role data → add method to UserRepository
+# ✅ All list endpoints MUST include PaginationParams
+@router.get("/", response_model=PaginatedResponse[MyResponse])
+async def list_items(
+    pag: dict = PaginationParams,        # ✅ REQUIRED
+    filters: dict = FilterParams,        # ✅ for generic filters
+    ...
+):
+    return await service.get_all(page=pag["page"], size=pag["size"], ...)
+
+# ✅ Service with AuditLogger for any create/update/delete operations
+class MyService:
+    def __init__(self, repo: MyRepo, audit: AuditLogger):  # ✅
+        self.repo = repo
+        self.audit = audit
+
+# ✅ Bulk queries with IN clause — never loop to fetch individual records
+role_ids = [r.id for r in roles]
+all_perms = await self.db.scalars(select(...).where(col.in_(role_ids)))  # ✅
+
+# ✅ Property setters for string fields that need sanitization
+_name: Mapped[str] = mapped_column("name", ...)
+@property
+def name(self) -> str:
+    return self._name
+@name.setter
+def name(self, value: str):
+    self._name = value.strip()  # ✅
 ```
 
 ## Key conventions
@@ -239,14 +296,13 @@ Si el producto ya existe en la estantería → en vez de devolver 409, suma la c
 ### ShelfItemRepository
 
 ```python
-class ShelfItemRepository:
+class ShelfItemRepository(BaseRepository):  # ✅ extends BaseRepository
     async def get_by_id(item_id) -> ShelfItem | None
     async def get_by_shelf_product(shelf_id, product_id) -> ShelfItem | None
     async def get_items_by_shelf(shelf_id) -> list[ShelfItem]
     async def get_items_by_product(product_id) -> list[ShelfItem]  # usado en validación de stock
-    async def create(shelf_id, product_id, quantity) -> ShelfItem
-    async def update(item, quantity) -> ShelfItem
-    async def delete(item) -> None
+    async def get_product_by_id(product_id) -> Product | None      # cross-module, allowed in repo
+    async def get_products_by_ids(product_ids) -> list[Product]     # bulk fetch para get_detail
 ```
 
 ### ShelfDetailResponse
