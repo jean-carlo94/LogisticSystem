@@ -34,7 +34,9 @@ class Base(DeclarativeBase):
     def _is_string_column(cls, col) -> bool:
         try:
             col_type = col.property.columns[0].type
-            from sqlalchemy import String, Text
+            from sqlalchemy import Enum as SAEnum, String, Text
+            if isinstance(col_type, SAEnum):
+                return False
             return isinstance(col_type, (String, Text))
         except Exception:
             return False
@@ -105,6 +107,8 @@ class Base(DeclarativeBase):
                     continue
                 coerced = cls._coerce_filter_value(col, str(value))
                 if coerced is None:
+                    from sqlalchemy import false as sa_false
+                    stmt = stmt.where(sa_false())
                     continue
                 if cls._is_string_column(col):
                     stmt = stmt.where(col.ilike(f"%{coerced}%"))

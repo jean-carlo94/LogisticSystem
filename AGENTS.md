@@ -103,6 +103,7 @@ def endpoint(service: MyService = Depends(get_my_service)): ...
 - **Pagination**: `PaginationParams = Depends(get_pagination)` for query params. Return type `PaginatedResponse[T]`.
 - **Exceptions**: Custom `AppException` subclasses (`NotFoundException`, `ConflictException`, `ValidationException`, etc.). Global handler in `main.py`. Services NEVER raise `HTTPException`.
 - **Env vars**: `DATABASE_URL` (required), `SECRET_KEY` (required). Others have defaults. `.env` gitignored; `.env.example` exists.
+- **Rate limit**: 1000 requests per 60s window (configurable via `RATE_LIMIT_REQUESTS`, set to 0 to disable). Returns 429 `"Demasiadas solicitudes. Intenta de nuevo mas tarde."` per client IP.
 - **Imports**: Use `from __future__ import annotations` + `TYPE_CHECKING` for cross-module type hints to prevent circular imports.
 
 ## Filters (GENÉRICOS)
@@ -215,11 +216,47 @@ Al asignar/actualizar item en estantería (`ShelfService._validate_capacity`):
 
 1. **Dimensiones:** producto.width_cm ≤ shelf.width_cm (solo si shelf > 0), igual para height y depth
 2. **Peso:** Σ(producto.weight_kg × item.quantity) ≤ shelf.max_weight_kg (solo si > 0)
+3. **Volumen:** total_volume (existing_volume + product_volume × quantity) ≤ shelf_volume (width × height × depth). Solo si shelf_volume > 0 (las 3 dimensiones > 0).
 
-Errores múltiples se concatenan con `"; "`. Al actualizar cantidad (PUT item) se excluye el propio peso del item para evitar doble conteo.
+Errores múltiples se concatenan con `"; "`. Al actualizar cantidad (PUT item / upsert POST) se excluye el propio item del peso y volumen para evitar doble conteo, vía `_get_total_weight` y `_get_total_volume` con `exclude_item_id`.
+
+### Shelves — validación de stock
+
+`ShelfService._validate_stock(product_id, quantity, exclude_item_id=None)`:
+
+- Obtiene `assigned = Σ(quantity)` de todos los items del producto en TODAS las estanterías (`ShelfItemRepository.get_items_by_product`)
+- En upsert (POST a item existente) y PUT update_item, excluye el propio item vía `exclude_item_id`
+- Valida: `assigned + quantity ≤ product.stock`
+- Error: `"Stock insuficiente: {stock} en inventario, {assigned} ya asignados, {quantity} solicitados = {total} total"`
+
+### Shelves — POST /items upsert
+
+Si el producto ya existe en la estantería → en vez de devolver 409, suma la cantidad a la existente (`existing.quantity + data.quantity`). Valida capacidad Y stock para la nueva cantidad total. Si alguna validación falla, no se modifica nada.
 
 - `ShelfItem` tiene UniqueConstraint `(shelf_id, product_id)` → no puede haber dos asignaciones del mismo producto en la misma estantería
 - Eliminar estantería solo si no tiene items → `ConflictException`
+
+### ShelfItemRepository
+
+```python
+class ShelfItemRepository:
+    async def get_by_id(item_id) -> ShelfItem | None
+    async def get_by_shelf_product(shelf_id, product_id) -> ShelfItem | None
+    async def get_items_by_shelf(shelf_id) -> list[ShelfItem]
+    async def get_items_by_product(product_id) -> list[ShelfItem]  # usado en validación de stock
+    async def create(shelf_id, product_id, quantity) -> ShelfItem
+    async def update(item, quantity) -> ShelfItem
+    async def delete(item) -> None
+```
+
+### ShelfDetailResponse
+
+```python
+class ShelfDetailResponse(ShelfResponse):
+    items: list[ShelfItemResponse] = []
+    current_weight_kg: float = 0
+    current_volume_cm3: float = 0  # Σ(product_volume × quantity) redondeado a 2 decimales
+```
 
 ## Barcode (products)
 
@@ -227,6 +264,7 @@ Errores múltiples se concatenan con `"; "`. Al actualizar cantidad (PUT item) s
 - Varios productos pueden tener `barcode=null`
 - Si se envía `barcode` y ya existe otro producto con ese valor → `409 Conflict`
 - Validación en create y update
+- Property setter convierte empty string a `None` → evita violación de unique constraint por `""`
 
 ## Dimensiones (products)
 
@@ -240,6 +278,8 @@ Errores múltiples se concatenan con `"; "`. Al actualizar cantidad (PUT item) s
 - Usuario admin: `admin@logistics.com` / `admin123` (is_super_admin=True, asignado al rol Admin)
 
 Idempotente: solo corre si tabla `permissions` está vacía.
+
+`scripts/seed_electrodomesticos.py` — script de seed masivo standalone: 200 productos, 200 estanterías, 200 usuarios con roles variados. Usa acceso directo a DB para velocidad.
 
 ## DB engine (lazy)
 

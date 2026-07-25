@@ -198,7 +198,7 @@
           "price": "float (>0, requerido)",
           "stock": "int (>=0, default 0)",
           "state": "string (ACTIVE|INACTIVE|NO_STOCK|DISCONTINUED, default ACTIVE)",
-          "barcode": "string|null (max 128, único)",
+          "barcode": "string|null (max 128, único. Empty string se convierte a null automáticamente)",
           "weight_kg": "float (>=0, default 0)",
           "width_cm": "float (>=0, default 0)",
           "height_cm": "float (>=0, default 0)",
@@ -210,7 +210,7 @@
         },
         "frontend_notes": [
           "stock=0 fuerza estado a NO_STOCK sin importar lo que envíes.",
-          "barcode es único pero puede ser null (varios productos sin barcode OK).",
+          "barcode es único pero puede ser null (varios productos sin barcode OK). Enviar string vacío o whitespace → se guarda como null.",
           "weight/dimensions son para validación de estantería luego."
         ]
       },
@@ -463,7 +463,7 @@
     },
 
     "shelves": {
-      "_intro": "Las estanterías organizan los productos en la bodega. Cada producto puede estar en múltiples estanterías con cantidades parciales. El sistema valida que el producto quepa (dimensiones) y no exceda el peso máximo.",
+      "_intro": "Las estanterías organizan los productos en la bodega. Cada producto puede estar en múltiples estanterías con cantidades parciales. El sistema valida dimensiones, peso, volumen y stock disponible. POST /items hace upsert (suma cantidad si ya existe).",
 
       "list": {
         "method": "GET",
@@ -511,6 +511,7 @@
           "height_cm": "float",
           "depth_cm": "float",
           "current_weight_kg": "float (peso total de productos asignados)",
+          "current_volume_cm3": "float (volumen total ocupado: Σ(product_volume × quantity), redondeado 2 decimales)",
           "items": [
             {
               "id": "int (ID del shelf_item)",
@@ -525,6 +526,7 @@
         },
         "frontend_notes": [
           "current_weight_kg es la suma de (producto.weight_kg × item.quantity) para todos los items.",
+          "current_volume_cm3 es la suma de (producto.width_cm × height_cm × depth_cm × quantity) para todos los items.",
           "items[] son los productos asignados a esta estantería con sus cantidades.",
           "Usa product_id para navegar al detalle del producto. product_name es solo para display."
         ]
@@ -592,13 +594,16 @@
         },
         "errores": {
           "404": "Estantería o producto no encontrado",
-          "409": "El producto ya está asignado a esta estantería",
-          "400": "Error de capacidad: 'Ancho del producto (50cm) excede el de la estantería (40cm); Peso total (210kg) excede la capacidad máxima (200kg)'"
+          "400": "Error de capacidad o stock, ej: 'Ancho del producto (50cm) excede el de la estantería (40cm); Stock insuficiente: 10 en inventario, 8 ya asignados, 5 solicitados = 13 total'"
+        },
+        "upsert": {
+          "_comportamiento": "Si el producto ya existe en la estantería, se suma la cantidad a la existente en vez de devolver 409. Se validan capacidad y stock para el nuevo total. Si falla, no se modifica nada."
         },
         "frontend_notes": [
-          "La validación de capacidad ocurre ANTES de guardar. Si falla, el item no se crea.",
+          "La validación de capacidad y stock ocurre ANTES de guardar. Si falla, el item no se crea/modifica.",
+          "Si el producto ya está en la estantería, se suma la cantidad (upsert). No hay error 409.",
           "Un producto puede estar en múltiples estanterías (ej: 10 unidades en A-01, 5 en B-03).",
-          "Si necesitas más cantidad del mismo producto en la misma estantería, usa PUT item."
+          "La validación de stock considera TODAS las estanterías donde el producto está asignado."
         ]
       },
 
@@ -610,9 +615,14 @@
           "quantity": "int (>=0)"
         },
         "response_shape": "mismo que ShelfItemResponse",
+        "errores": {
+          "404": "Ítem no encontrado en esta estantería",
+          "400": "Error de capacidad, volumen o stock (mismas validaciones que add_item)"
+        },
         "frontend_notes": [
           "Si quantity=0, el item se elimina (mismo efecto que DELETE).",
-          "La validación de capacidad se ejecuta con la NUEVA cantidad.",
+          "La validación de capacidad, volumen y stock se ejecuta con la NUEVA cantidad.",
+          "La validación de stock excluye el propio item del conteo de ya-asignados.",
           "Para incrementar/decrementar stock, calcula nuevo quantity y haz PUT."
         ]
       },
@@ -644,8 +654,9 @@
     "asignar_producto_a_estanteria": [
       "1. GET /shelves/ para elegir estantería destino",
       "2. POST /shelves/{id}/items con {product_id, quantity}",
-      "3. Si 400 → mostrar errores de capacidad al usuario",
-      "4. Si 201 → el producto ya está en la estantería"
+      "3. Si el producto ya está en la estantería → se suma la cantidad (upsert), no hay error 409",
+      "4. Si 400 → mostrar errores de capacidad/volumen/stock al usuario",
+      "5. Si 201 → el producto está asignado"
     ],
     "escanear_qr_para_ubicar_producto": [
       "1. GET /products/{id}/qr → obtienes JSON con shelf info",
@@ -653,9 +664,10 @@
       "3. Al escanear: muestras aisle, row, level (ej: 'Pasillo A, Fila 1, Nivel 3')"
     ],
     "dashboard_estanteria": [
-      "1. GET /shelves/{id} → obtienes items + current_weight_kg",
+      "1. GET /shelves/{id} → obtienes items + current_weight_kg + current_volume_cm3",
       "2. Muestras barra de capacidad: current_weight / max_weight",
-      "3. Lista de items cliqueables → navegan a GET /products/{product_id}"
+      "3. Muestras volumen ocupado vs capacidad: current_volume / shelf_volume",
+      "4. Lista de items cliqueables → navegan a GET /products/{product_id}"
     ]
   },
 

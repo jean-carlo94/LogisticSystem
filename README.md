@@ -214,12 +214,19 @@ Al eliminar un producto/usuario, su imagen se borra del disco automáticamente.
 
 ## Validación de capacidad (estanterías)
 
-Al asignar un producto a una estantería se validan dos reglas:
+Al asignar un producto a una estantería se validan tres reglas:
 
 1. **Dimensiones:** cada dimensión del producto (`width_cm`, `height_cm`, `depth_cm`) debe ser ≤ la dimensión de la estantería. Solo si el valor de la estantería es > 0.
 2. **Peso:** Σ(producto.weight_kg × item.quantity) ≤ shelf.max_weight_kg. Solo si max_weight_kg > 0.
+3. **Volumen:** total_volume (existing_volume + product_volume × quantity) ≤ shelf_volume (width × height × depth). Solo si shelf_volume > 0 (todas las dimensiones > 0).
 
-Error → `400 Bad Request` con detalle de todas las validaciones fallidas.
+Además se valida **stock**: Σ(quantity asignada en todas las estanterías) + nueva_cantidad ≤ product.stock.
+
+Error → `400 Bad Request` con detalle de todas las validaciones fallidas concatenadas con `"; "`.
+
+**POST /items upsert:** Si el producto ya existe en la estantería, se suma la cantidad a la existente en vez de devolver 409. Se validan capacidad y stock para el nuevo total. Si alguna validación falla, no se modifica nada.
+
+La respuesta de detalle (`GET /shelves/{id}`) incluye `current_weight_kg` (peso total) y `current_volume_cm3` (volumen total ocupado).
 
 ## Modelos
 
@@ -251,7 +258,7 @@ Error → `400 Bad Request` con detalle de todas las validaciones fallidas.
 | `price` | float | `round(2)`, gt=0 |
 | `stock` | int | `max(0)`, ge=0 |
 | `state` | enum | ACTIVE\|INACTIVE\|NO_STOCK\|DISCONTINUED |
-| `barcode` | str(128)\|null | único, indexado |
+| `barcode` | str(128)\|null | único, indexado, setter convierte "" → null |
 | `image_path` | str(500)\|null | ruta relativa en storage |
 | `weight_kg` | float | `max(0)`, ge=0 |
 | `width_cm` | float | `max(0)`, ge=0 |
@@ -325,6 +332,8 @@ UniqueConstraint: `(shelf_id, product_id)` — mismo producto no puede estar dos
 | `ACCESS_TOKEN_EXPIRE_HOURS` | `24` | Expiración JWT |
 | `CORS_ORIGINS` | `["*"]` | Orígenes CORS |
 | `APP_PORT` | `8000` | Puerto HTTP |
+| `RATE_LIMIT_REQUESTS` | `1000` | Requests por ventana (0=deshabilitado) |
+| `RATE_LIMIT_WINDOW` | `60` | Ventana en segundos |
 | `STORAGE_BACKEND` | `local` | `local` o `s3` (futuro) |
 | `STORAGE_PATH` | `static/uploads` | Directorio base local |
 | `S3_BUCKET` | *(vacío)* | Bucket S3 |
@@ -341,6 +350,8 @@ UniqueConstraint: `(shelf_id, product_id)` — mismo producto no puede estar dos
 ## Seed
 
 `app/seed.json` define permisos y roles iniciales. `app/core/seed.py` lo carga y crea usuario admin default (`admin@logistics.com` / `admin123`, super_admin) al primer arranque. Para agregar permisos/roles: editar seed.json + `app/core/permissions.py`. El seed es idempotente (solo corre si tabla permissions vacía).
+
+`scripts/seed_electrodomesticos.py` — seed masivo standalone: 200 productos, 200 estanterías, 200 usuarios con roles variados. Usa acceso directo a DB para velocidad.
 
 ## Agregar nuevo módulo
 
