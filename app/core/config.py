@@ -20,10 +20,17 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"
     STORAGE_PATH: str = "static/uploads"
     S3_BUCKET: str = ""
-    S3_REGION: str = "us-east-1"
+    S3_REGION: str = "auto"
     S3_ACCESS_KEY: str = ""
     S3_SECRET_KEY: str = ""
     S3_ENDPOINT: str = ""
+    S3_PUBLIC_URL: str = ""
+
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "noreply@logisticsystem.com"
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCOUNT_ACTIVATION_EXPIRE_HOURS: int = 24
+    FRONTEND_URL: str = "http://localhost:3000"
 
 
 @lru_cache()

@@ -28,9 +28,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
-def create_access_token(user_id: int) -> str:
+def create_access_token(user_id: int, token_version: int = 0) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
-    payload: dict[str, Any] = {"sub": str(user_id), "exp": expire}
+    payload: dict[str, Any] = {"sub": str(user_id), "exp": expire, "ver": token_version}
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
 
@@ -43,6 +43,7 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         user_id: str | None = payload.get("sub")
+        token_ver: int = payload.get("ver", 0)
     except JWTError:
         raise UnauthorizedException("Credenciales invalidas o expiradas")
 
@@ -52,6 +53,8 @@ async def get_current_user(
     user = await db.get(User, int(user_id))
     if user is None or not user.is_active:
         raise UnauthorizedException("Credenciales invalidas o expiradas")
+    if user.token_version != token_ver:
+        raise UnauthorizedException("Sesion invalida. La contrasena fue cambiada. Inicia sesion de nuevo.")
     return user
 
 

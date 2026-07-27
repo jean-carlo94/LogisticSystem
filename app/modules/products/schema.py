@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.core.storage import get_image_url
 from app.modules.products.enums import ProductState
 
 
@@ -57,8 +58,7 @@ class ProductResponse(ProductBase):
 
     @model_validator(mode="after")
     def set_image_url(self) -> "ProductResponse":
-        if self.image_path:
-            self.image_url = f"/static/{self.image_path}"
+        self.image_url = get_image_url(self.image_path)
         return self
 
 

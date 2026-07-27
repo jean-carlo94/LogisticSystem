@@ -1,6 +1,9 @@
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import select, update
+
 from app.core.repository import BaseRepository
-from app.modules.users.model import User
+from app.modules.users.model import AccountActivation, PasswordResetToken, User
 
 
 class UserRepository(BaseRepository):
@@ -70,3 +73,63 @@ class UserRepository(BaseRepository):
             select(Sale.id).where(Sale.created_by == user_id).limit(1)
         )
         return s is not None
+
+    async def create_reset_token(
+        self, user_id: int, token_hash: str, expires_at: datetime
+    ) -> PasswordResetToken:
+        token = PasswordResetToken(
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        self.db.add(token)
+        await self.db.flush()
+        return token
+
+    async def invalidate_user_tokens(self, user_id: int) -> None:
+        await self.db.execute(
+            update(PasswordResetToken)
+            .where(PasswordResetToken.user_id == user_id)
+            .values(used=True)
+        )
+        await self.db.flush()
+
+    async def find_valid_token(self, token_hash: str) -> PasswordResetToken | None:
+        now = datetime.utcnow()
+        return await self.db.scalar(
+            select(PasswordResetToken).where(
+                PasswordResetToken.token_hash == token_hash,
+                PasswordResetToken.used == False,
+                PasswordResetToken.expires_at > now,
+            )
+        )
+
+    async def create_activation_token(
+        self, user_id: int, token_hash: str, expires_at: datetime
+    ) -> AccountActivation:
+        token = AccountActivation(
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        self.db.add(token)
+        await self.db.flush()
+        return token
+
+    async def invalidate_user_activations(self, user_id: int) -> None:
+        await self.db.execute(
+            update(AccountActivation)
+            .where(AccountActivation.user_id == user_id)
+            .values(used=True)
+        )
+        await self.db.flush()
+
+    async def find_valid_activation(self, token_hash: str) -> AccountActivation | None:
+        now = datetime.utcnow()
+        return await self.db.scalar(
+            select(AccountActivation).where(
+                AccountActivation.token_hash == token_hash,
+                AccountActivation.used == False,
+                AccountActivation.expires_at > now,
+            )
+        )

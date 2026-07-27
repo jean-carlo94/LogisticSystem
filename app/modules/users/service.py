@@ -1,10 +1,17 @@
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import UploadFile
 
 from app.core.audit import AuditLogger
-from app.core.exceptions import ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
+from app.core.config import settings
+from app.core.email import EmailSender
+from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
 from app.core.pagination import PaginatedResult
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.storage import generate_filename, get_storage
+from app.core.templates import render_template
 from app.modules.users.model import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schema import (
@@ -14,9 +21,10 @@ from app.modules.users.schema import (
 
 
 class UserService:
-    def __init__(self, repo: UserRepository, audit: AuditLogger):
+    def __init__(self, repo: UserRepository, audit: AuditLogger, email: EmailSender):
         self.repo = repo
         self.audit = audit
+        self.email = email
 
     async def register(self, user_in: UserCreate) -> User:
         if await self.repo.find_by_email(user_in.email):
@@ -30,17 +38,78 @@ class UserService:
             phone=user_in.phone,
             city=user_in.city,
             country=user_in.country,
+            is_active=False,
         )
         await self.audit.log_create("User", user.id, user.id, user)
+        await self._send_activation_email(user)
         return user
+
+    async def _send_activation_email(self, user: User) -> None:
+        await self.repo.invalidate_user_activations(user.id)
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            hours=settings.ACCOUNT_ACTIVATION_EXPIRE_HOURS
+        )
+        expires_at = expires_at.replace(tzinfo=None)
+
+        await self.repo.create_activation_token(user.id, token_hash, expires_at)
+        await self.audit.log_create("AccountActivation", user.id, user.id, {"action": "activation_token_created"})
+
+        activate_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
+        html = render_template(
+            "emails/account_activation.html",
+            {
+                "user_name": user.first_name or user.email,
+                "activate_url": activate_url,
+                "expires_hours": settings.ACCOUNT_ACTIVATION_EXPIRE_HOURS,
+                "current_year": datetime.utcnow().year,
+            },
+        )
+
+        try:
+            await self.email.send(user.email, "Activa tu cuenta", html)
+        except Exception as e:
+            print(f"[email] Failed to send activation to {user.email}: {e}")
+            from app.core.exceptions import AppException
+            raise AppException("No se pudo enviar el email de activacion. Por favor intenta de nuevo.", 500)
+
+    async def activate_account(self, token: str) -> None:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        activation = await self.repo.find_valid_activation(token_hash)
+        if not activation:
+            raise BadRequestException("Token invalido o expirado")
+
+        user = await self.repo.get_by_id(activation.user_id)
+        if not user:
+            raise BadRequestException("Token invalido o expirado")
+
+        if user.is_active:
+            raise BadRequestException("La cuenta ya esta activada")
+
+        await self.repo.update(user, is_active=True)
+        await self.repo.invalidate_user_activations(user.id)
+
+        await self.audit.log_update("User", user.id, user.id, {"is_active": True})
+
+    async def resend_activation(self, email: str) -> None:
+        user = await self.repo.find_by_email(email)
+        if not user:
+            return
+
+        if user.is_active:
+            return
+
+        await self._send_activation_email(user)
 
     async def authenticate(self, credentials: UserLogin) -> TokenResponse:
         user = await self.repo.find_by_email(credentials.email)
         if not user or not verify_password(credentials.password, user.hashed_password):
             raise UnauthorizedException("Email o contrasena incorrectos")
         if not user.is_active:
-            raise ForbiddenException("Usuario inactivo")
-        return TokenResponse(access_token=create_access_token(user.id))
+            raise ForbiddenException("Cuenta no activada. Revisa tu correo para activarla.")
+        return TokenResponse(access_token=create_access_token(user.id, user.token_version))
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
@@ -149,6 +218,58 @@ class UserService:
         await self.repo.update(user, image_path=relative_path)
         await self.audit.log_update("User", user.id, actor_id, {"image_path": relative_path})
         return user
+
+    async def request_password_reset(self, email: str) -> None:
+        user = await self.repo.find_by_email(email)
+        if not user or not user.is_active:
+            return
+
+        await self.repo.invalidate_user_tokens(user.id)
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+        )
+        expires_at = expires_at.replace(tzinfo=None)
+
+        await self.repo.create_reset_token(user.id, token_hash, expires_at)
+        await self.audit.log_create("PasswordResetToken", user.id, user.id, {"action": "reset_token_created"})
+
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+        html = render_template(
+            "emails/password_reset.html",
+            {
+                "user_name": user.first_name or user.email,
+                "reset_url": reset_url,
+                "expires_minutes": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+                "current_year": datetime.utcnow().year,
+            },
+        )
+
+        try:
+            await self.email.send(user.email, "Recuperacion de contrasena", html)
+        except Exception as e:
+            print(f"[email] Failed to send reset to {user.email}: {e}")
+
+    async def reset_password(self, token: str, new_password: str) -> None:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        reset_token = await self.repo.find_valid_token(token_hash)
+        if not reset_token:
+            raise BadRequestException("Token invalido o expirado")
+
+        user = await self.repo.get_by_id(reset_token.user_id)
+        if not user:
+            raise BadRequestException("Token invalido o expirado")
+
+        update_data = {"hashed_password": hash_password(new_password), "token_version": user.token_version + 1}
+        if not user.is_active:
+            update_data["is_active"] = True
+
+        await self.repo.update(user, **update_data)
+        await self.repo.invalidate_user_tokens(user.id)
+
+        await self.audit.log_update("User", user.id, user.id, {"password": "changed", "token_version_incremented": True})
 
     async def delete_image(self, user_id: int, actor_id: int) -> None:
         user = await self.repo.get_by_id(user_id)

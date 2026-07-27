@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
+from app.core.storage import get_image_url
+
 
 class UserCreate(BaseModel):
     email: EmailStr = Field(..., examples=["usuario@email.com"])
@@ -36,8 +38,7 @@ class UserResponse(BaseModel):
 
     @model_validator(mode="after")
     def set_image_url(self) -> "UserResponse":
-        if self.image_path:
-            self.image_url = f"/static/{self.image_path}"
+        self.image_url = get_image_url(self.image_path)
         return self
 
 
@@ -76,8 +77,7 @@ class UserAdminResponse(BaseModel):
 
     @model_validator(mode="after")
     def set_image_url(self) -> "UserAdminResponse":
-        if self.image_path:
-            self.image_url = f"/static/{self.image_path}"
+        self.image_url = get_image_url(self.image_path)
         return self
 
 
@@ -107,8 +107,7 @@ class UserProfileResponse(BaseModel):
 
     @model_validator(mode="after")
     def set_image_url(self) -> "UserProfileResponse":
-        if self.image_path:
-            self.image_url = f"/static/{self.image_path}"
+        self.image_url = get_image_url(self.image_path)
         return self
 
 
@@ -123,3 +122,24 @@ class UserProfileUpdate(BaseModel):
 
 class UserAssignRole(BaseModel):
     role_id: int
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ActivationRequest(BaseModel):
+    token: str = Field(..., min_length=1, max_length=256)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1, max_length=256)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class ResendActivationRequest(BaseModel):
+    email: EmailStr
+
+
+class MessageResponse(BaseModel):
+    message: str

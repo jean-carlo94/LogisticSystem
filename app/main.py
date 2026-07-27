@@ -16,11 +16,11 @@ from app.core.seed import seed_defaults
 
 
 STATIC_DIR = Path(settings.STORAGE_PATH)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    STATIC_DIR.mkdir(parents=True, exist_ok=True)
     await seed_defaults()
     yield
 

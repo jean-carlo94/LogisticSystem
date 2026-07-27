@@ -10,7 +10,7 @@ from app.core.database import Base
 
 from app.modules.products.model import Product
 from app.modules.events.model import Event
-from app.modules.users.model import User
+from app.modules.users.model import AccountActivation, PasswordResetToken, User
 from app.modules.roles.model import Permission, Role, RolePermission, UserRole
 from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.categories.model import Category, ProductCategory

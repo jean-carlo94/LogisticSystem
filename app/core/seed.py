@@ -14,14 +14,14 @@ SEED_PATH = Path(__file__).parent.parent / "seed.json"
 
 async def seed_defaults():
     async with _get_sessionmaker()() as db:
+        existing_perms = await db.scalars(select(Permission).limit(1))
+        if existing_perms.first() is not None:
+            return
+
         data = json.loads(SEED_PATH.read_text())
 
-        existing_perms = await db.scalars(select(Permission))
-        existing_codes = {p.code for p in existing_perms}
-
         for code, desc in data["permissions"].items():
-            if code not in existing_codes:
-                db.add(Permission(code=code, description=desc))
+            db.add(Permission(code=code, description=desc))
 
         await db.flush()
 

@@ -45,6 +45,10 @@ class RateLimiter:
 
 _rate_limiter = RateLimiter(settings.RATE_LIMIT_REQUESTS, settings.RATE_LIMIT_WINDOW)
 
+forgot_password_limiter = RateLimiter(5, 60)
+
+activate_limiter = RateLimiter(10, 60)
+
 
 async def rate_limit_middleware(request: Request, call_next):
     client = request.client.host if request.client else "unknown"
