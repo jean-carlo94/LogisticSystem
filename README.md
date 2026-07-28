@@ -50,6 +50,8 @@ app/
 
 ## Instalación
 
+### Desarrollo
+
 ```bash
 git clone <repo-url> && cd LogisticSystemAPI
 cp .env.example .env
@@ -66,6 +68,36 @@ pip install -r requirements.txt
 # Configurar .env con DATABASE_URL y SECRET_KEY
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+### Producción
+
+```bash
+cp .env.prod.example .env.prod
+# Editar .env.prod con valores de producción:
+#   SECRET_KEY (generar con: openssl rand -base64 48)
+#   POSTGRES_PASSWORD (contraseña segura)
+#   ADMIN_EMAIL / ADMIN_PASSWORD (admin inicial)
+#   CORS_ORIGINS (dominio del frontend en producción)
+#   FRONTEND_URL (URL del frontend para links de email)
+
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+**Diferencias con desarrollo:**
+
+| Aspecto | Desarrollo | Producción |
+|---------|-----------|------------|
+| Source code | Volume mount `.` → `/app` | Imagen autocontenida |
+| PostgreSQL | Puerto 5432 expuesto | Solo red interna |
+| Uploads | Volume host `static/uploads` | Volumen Docker `uploads_data` |
+| Rate limit | 1000 req/60s | 200 req/60s (configurable) |
+| Body size | 10MB | 5MB (configurable) |
+| CORS | `*` o `localhost:*` | Dominio explícito |
+| Restart | `unless-stopped` | `always` |
+| Healthcheck | Solo postgres | App + postgres |
+| Recursos | Sin límites | CPU + memoria limitados |
+
+Para producción con reverse proxy (nginx/traefik), apuntar al puerto 8000 del contenedor y configurar TLS en el proxy. La app acepta `--proxy-headers` para respetar `X-Forwarded-*`.
 
 Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhost:8000/redoc)
 

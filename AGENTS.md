@@ -6,9 +6,13 @@
 # Dev (local, needs PostgreSQL)
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Docker (standalone, preferred)
+# Docker dev (volume-mounted source, DB port exposed)
 docker compose up --build -d
 docker compose down -v   # (destruye volúmenes, DB fresca)
+
+# Docker production (self-contained image, no DB port exposure)
+cp .env.prod.example .env.prod   # editar con valores reales
+docker compose -f docker-compose.prod.yml up --build -d
 ```
 
 No test suite, linter, formatter, or typechecker. `.gitignore` excludes `venv/` and `.env`.
