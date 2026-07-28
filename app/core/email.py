@@ -47,6 +47,3 @@ class EmailSender:
         logger.info("Email sent to %s: %s", to, result.get("id", "unknown"))
         return result
 
-
-def get_email_sender() -> EmailSender:
-    return EmailSender()

@@ -19,14 +19,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW: int = 60
     REQUEST_BODY_MAX_SIZE_MB: int = 10
 
-    STORAGE_BACKEND: str = "local"
     STORAGE_PATH: str = "static/uploads"
-    S3_BUCKET: str = ""
-    S3_REGION: str = "auto"
-    S3_ACCESS_KEY: str = ""
-    S3_SECRET_KEY: str = ""
-    S3_ENDPOINT: str = ""
-    S3_PUBLIC_URL: str = ""
 
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "noreply@logisticsystem.com"

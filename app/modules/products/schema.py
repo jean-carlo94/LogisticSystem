@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.core.storage import get_image_url
-from app.modules.products.enums import ProductState
+from app.modules.products.model import ProductState
 
 
 class ProductBase(BaseModel):

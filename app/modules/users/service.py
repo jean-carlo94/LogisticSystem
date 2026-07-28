@@ -11,7 +11,7 @@ from app.core.audit import AuditLogger
 from app.core.config import settings
 from app.core.email import EmailSender
 from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
-from app.core.pagination import PaginatedResult
+from app.core.pagination import PaginatedResponse
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.storage import generate_filename, get_storage
 from app.core.templates import render_template
@@ -118,10 +118,10 @@ class UserService:
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
-    ) -> PaginatedResult[User]:
+    ) -> PaginatedResponse[User]:
         skip = (page - 1) * size
         items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
-        return PaginatedResult.of(list(items), total, page, size)
+        return PaginatedResponse.of(list(items), total, page, size)
 
     async def get_by_id(self, user_id: int) -> User:
         user = await self.repo.get_by_id(user_id)

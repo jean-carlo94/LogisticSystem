@@ -1,8 +1,8 @@
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
-from app.core.pagination import PaginatedResult
+from app.core.pagination import PaginatedResponse
 from app.modules.products.repository import ProductRepository
-from app.modules.sales.enums import SaleStatus
+from app.modules.sales.model import SaleStatus
 from app.modules.sales.model import Sale
 from app.modules.sales.repository import SaleItemRepository, SaleRepository
 from app.modules.sales.schema import (
@@ -30,12 +30,12 @@ class SaleService:
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
-    ) -> PaginatedResult[Sale]:
+    ) -> PaginatedResponse[Sale]:
         skip = (page - 1) * size
         items, total = await self.sale_repo.get_all(
             skip=skip, limit=size, filters=filters
         )
-        return PaginatedResult.of(list(items), total, page, size)
+        return PaginatedResponse.of(list(items), total, page, size)
 
     async def get_by_id(self, sale_id: int) -> SaleDetailResponse:
         return await self._build_detail(sale_id)

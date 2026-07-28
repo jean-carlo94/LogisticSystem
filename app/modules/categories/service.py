@@ -1,6 +1,6 @@
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
-from app.core.pagination import PaginatedResult
+from app.core.pagination import PaginatedResponse
 from app.modules.categories.model import Category
 from app.modules.categories.repository import CategoryRepository
 from app.modules.categories.schema import CategoryCreate, CategoryUpdate
@@ -13,10 +13,10 @@ class CategoryService:
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
-    ) -> PaginatedResult[Category]:
+    ) -> PaginatedResponse[Category]:
         skip = (page - 1) * size
         items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
-        return PaginatedResult.of(list(items), total, page, size)
+        return PaginatedResponse.of(list(items), total, page, size)
 
     async def create(self, data: CategoryCreate, user_id: int) -> Category:
         if await self.repo.find_by_name(data.name):

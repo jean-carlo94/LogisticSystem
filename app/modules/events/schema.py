@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.modules.events.enums import ActionType
+from app.modules.events.model import ActionType
 
 
 class EventResponse(BaseModel):

@@ -3,8 +3,14 @@ from datetime import datetime
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+import enum
+
 from app.core.database import Base
-from app.modules.sales.enums import SaleStatus
+
+
+class SaleStatus(str, enum.Enum):
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 class Sale(Base):

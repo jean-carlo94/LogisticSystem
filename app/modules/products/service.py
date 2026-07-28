@@ -2,9 +2,9 @@ from fastapi import UploadFile
 
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
-from app.core.pagination import PaginatedResult
+from app.core.pagination import PaginatedResponse
 from app.core.storage import generate_filename, get_storage
-from app.modules.products.enums import ProductState
+from app.modules.products.model import ProductState
 from app.modules.products.model import Product
 from app.modules.products.repository import ProductRepository
 from app.modules.products.schema import (
@@ -19,10 +19,10 @@ class ProductService:
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
-    ) -> PaginatedResult[Product]:
+    ) -> PaginatedResponse[Product]:
         skip = (page - 1) * size
         items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
-        return PaginatedResult.of(list(items), total, page, size)
+        return PaginatedResponse.of(list(items), total, page, size)
 
     async def get_by_id(self, product_id: int) -> Product | None:
         return await self.repo.get_by_id(product_id)

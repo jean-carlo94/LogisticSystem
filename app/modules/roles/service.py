@@ -1,6 +1,6 @@
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
-from app.core.pagination import PaginatedResult
+from app.core.pagination import PaginatedResponse
 from app.modules.roles.model import Role
 from app.modules.roles.repository import PermissionRepository, RoleRepository, UserRoleRepository
 from app.modules.roles.schema import RoleCreate, RoleUpdate
@@ -14,10 +14,10 @@ class RoleService:
         self.user_role_repo = user_role_repo
         self.audit = audit
 
-    async def get_all(self, page: int = 1, size: int = 20, filters: dict | None = None) -> PaginatedResult[Role]:
+    async def get_all(self, page: int = 1, size: int = 20, filters: dict | None = None) -> PaginatedResponse[Role]:
         skip = (page - 1) * size
         items, total = await self.role_repo.get_all(skip=skip, limit=size, filters=filters)
-        return PaginatedResult.of(list(items), total, page, size)
+        return PaginatedResponse.of(list(items), total, page, size)
 
     async def create(self, data: RoleCreate) -> Role:
         if await self.role_repo.find_by_name(data.name):

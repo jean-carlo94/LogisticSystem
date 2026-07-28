@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import _get_sessionmaker
 from app.core.security import hash_password
 from app.modules.products.model import Product
-from app.modules.products.enums import ProductState
+from app.modules.products.model import ProductState
 from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.users.model import User
 from app.modules.roles.model import Permission, Role, RolePermission, UserRole

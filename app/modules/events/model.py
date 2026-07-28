@@ -1,12 +1,18 @@
 from datetime import datetime
-from typing import Sequence
 
-from sqlalchemy import Enum, Index, Integer, String, Text, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import Enum, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+import enum
+
 from app.core.database import Base
-from app.modules.events.enums import ActionType
+
+
+class ActionType(str, enum.Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    STATUS_CHANGED = "STATUS_CHANGED"
 
 
 class Event(Base):
@@ -28,20 +34,3 @@ class Event(Base):
         "createAt", server_default=func.now(), nullable=False
     )
 
-    @classmethod
-    async def find_by_entity(
-        cls,
-        db: AsyncSession,
-        entity_type: str,
-        entity_id: int,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> tuple[Sequence["Event"], int]:
-        base = select(cls).where(
-            cls.entity_type == entity_type, cls.entity_id == entity_id
-        )
-        total = await db.scalar(select(func.count()).select_from(base.subquery()))
-        items = (await db.scalars(
-            base.order_by(cls.create_at.desc()).offset(skip).limit(limit)
-        )).all()
-        return items, total

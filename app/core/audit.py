@@ -4,7 +4,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import class_mapper
 
-from app.modules.events.enums import ActionType
+from app.modules.events.model import ActionType
 from app.modules.events.model import Event
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
 from typing import Generic, TypeVar
 
 from fastapi import Depends, Query, Request
@@ -10,16 +9,15 @@ from pydantic import BaseModel
 T = TypeVar("T")
 
 
-@dataclass
-class PaginatedResult(Generic[T]):
-    items: list[T] = field(default_factory=list)
-    total: int = 0
-    page: int = 1
-    size: int = 20
-    pages: int = 0
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: list[T]
+    total: int
+    page: int
+    size: int
+    pages: int
 
     @classmethod
-    def of(cls, items: list[T], total: int, page: int, size: int) -> "PaginatedResult[T]":
+    def of(cls, items: list[T], total: int, page: int, size: int) -> "PaginatedResponse[T]":
         return cls(
             items=items,
             total=total,
@@ -27,14 +25,6 @@ class PaginatedResult(Generic[T]):
             size=size,
             pages=max(1, math.ceil(total / size)) if total > 0 else 0,
         )
-
-
-class PaginatedResponse(BaseModel, Generic[T]):
-    items: list[T]
-    total: int
-    page: int
-    size: int
-    pages: int
 
 
 RESERVED_PARAMS = {"page", "size"}

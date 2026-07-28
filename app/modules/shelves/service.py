@@ -1,6 +1,6 @@
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
-from app.core.pagination import PaginatedResult
+from app.core.pagination import PaginatedResponse
 from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.shelves.repository import ShelfItemRepository, ShelfRepository
 from app.modules.shelves.schema import (
@@ -22,10 +22,10 @@ class ShelfService:
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
-    ) -> PaginatedResult[Shelf]:
+    ) -> PaginatedResponse[Shelf]:
         skip = (page - 1) * size
         items, total = await self.shelf_repo.get_all(skip=skip, limit=size, filters=filters)
-        return PaginatedResult.of(list(items), total, page, size)
+        return PaginatedResponse.of(list(items), total, page, size)
 
     async def get_by_id(self, shelf_id: int) -> Shelf | None:
         return await self.shelf_repo.get_by_id(shelf_id)

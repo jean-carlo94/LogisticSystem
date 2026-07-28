@@ -3,8 +3,16 @@ from datetime import datetime
 from sqlalchemy import Enum, Float, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+import enum
+
 from app.core.database import Base
-from app.modules.products.enums import ProductState
+
+
+class ProductState(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    NO_STOCK = "NO_STOCK"
+    DISCONTINUED = "DISCONTINUED"
 
 
 class Product(Base):
