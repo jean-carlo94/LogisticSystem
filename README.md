@@ -69,7 +69,13 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhost:8000/redoc)
 
-**Admin default:** `admin@logistics.com` / `admin123` (super_admin con todos los permisos)
+**Admin default:** Solo se crea si se configuran `ADMIN_EMAIL` y `ADMIN_PASSWORD` en `.env`. Si no se definen, no se crea ningún admin por defecto.
+
+**CORS:** Configurar `CORS_ORIGINS` con los orígenes del frontend. Si se deja vacío, se permite cualquier origen (`*`) pero sin credenciales. Para solicitudes con cookies o `Authorization`, especificar orígenes explícitos:
+
+```bash
+CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+```
 
 ## Endpoints
 
@@ -200,6 +206,49 @@ await self.audit.log_status_change("Product", id, user_id, old, new)
 await self.audit.log_delete("Product", product.id, user_id, product)
 ```
 
+## Seguridad
+
+### Autenticación
+- **bcrypt** para hashing de contraseñas con salt automático
+- **JWT HS256** con `SECRET_KEY` (mín. 32 caracteres validado al iniciar)
+- **Token version** — al cambiar contraseña se invalida la sesión de todos los dispositivos
+- **Rate limit** por IP: 1000 req/60s global, 5 req/60s en forgot-password, 10 req/60s en activate
+
+### Protección de datos
+- `hashed_password` excluido de filtros genéricos (`__filterable_skip__`) y del audit log
+- Tokens de reset/activación hasheados con SHA-256 en BD (nunca se almacena el token crudo)
+- **Mitigación de timing attack** en forgot-password con delay aleatorio cuando el email no existe
+- Campos string con `max_length` en schemas Pydantic (previene overflow y limita surface de ataque)
+- **Límite de body size**: 10MB por defecto (`REQUEST_BODY_MAX_SIZE_MB`), retorna 413 si se excede
+
+### Upload de archivos
+- Validación de tipo MIME: solo JPEG, PNG, WebP, GIF, SVG
+- Nombres generados con UUID (previene path traversal)
+- Límite de 10MB por archivo
+- Al eliminar entidad se borra su imagen del storage
+
+### Headers de seguridad
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`  
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Cache-Control: no-store, max-age=0`
+
+### RBAC
+- `require_permission(code)` — dependencia inyectable en todas las rutas protegidas
+- `is_super_admin=True` — bypass total de permisos
+- Validación en capa de ruta (no en servicio): si no tiene permiso → 403
+
+### Docker
+- **Multi-stage build**: herramientas de compilación (gcc, libpq-dev) solo en stage builder
+- `.dockerignore` excluye `.env`, `.git`, `venv/`, `__pycache__`, etc.
+- PostgreSQL no expuesto al host en producción (mapeo de puertos comentable)
+
+### Logging
+- `logging` estructurado en lugar de `print()` (main, email, servicios)
+- No se loguean contraseñas ni datos sensibles
+- Formato: `timestamp [LEVEL] module: message`
+
 ## Almacenamiento de imágenes
 
 Storage abstraction con adapter pattern (`app/core/storage.py`):
@@ -326,21 +375,30 @@ UniqueConstraint: `(shelf_id, product_id)` — mismo producto no puede estar dos
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `DATABASE_URL` | *(requerido)* | postgresql://user:pass@host:5432/db |
-| `SECRET_KEY` | *(requerido)* | JWT signing key |
+| `SECRET_KEY` | *(requerido)* | JWT signing key (mín. 32 caracteres) |
+| `ADMIN_EMAIL` | *(vacío)* | Email del admin creado en primer arranque |
+| `ADMIN_PASSWORD` | *(vacío)* | Password del admin (si no se define, no se crea admin) |
 | `API_V1_STR` | `/api/v1` | Prefijo API |
 | `PROJECT_NAME` | `LogisticSystem` | Título docs |
 | `ACCESS_TOKEN_EXPIRE_HOURS` | `24` | Expiración JWT |
-| `CORS_ORIGINS` | `["*"]` | Orígenes CORS |
+| `CORS_ORIGINS` | `["*"]` cuando vacío | Orígenes permitidos (JSON array). Vacío = `*` sin credenciales. Con orígenes explícitos: habilita credenciales. |
 | `APP_PORT` | `8000` | Puerto HTTP |
 | `RATE_LIMIT_REQUESTS` | `1000` | Requests por ventana (0=deshabilitado) |
 | `RATE_LIMIT_WINDOW` | `60` | Ventana en segundos |
-| `STORAGE_BACKEND` | `local` | `local` o `s3` (futuro) |
+| `REQUEST_BODY_MAX_SIZE_MB` | `10` | Tamaño máximo del body (MB) |
+| `STORAGE_BACKEND` | `local` | `local` o `s3` |
 | `STORAGE_PATH` | `static/uploads` | Directorio base local |
 | `S3_BUCKET` | *(vacío)* | Bucket S3 |
-| `S3_REGION` | `us-east-1` | Región S3 |
+| `S3_REGION` | `auto` | Región S3 |
 | `S3_ACCESS_KEY` | *(vacío)* | Access key S3 |
 | `S3_SECRET_KEY` | *(vacío)* | Secret key S3 |
 | `S3_ENDPOINT` | *(vacío)* | Endpoint S3 personalizado |
+| `S3_PUBLIC_URL` | *(vacío)* | URL pública para assets S3 |
+| `RESEND_API_KEY` | *(vacío)* | API key de Resend (email) |
+| `RESEND_FROM_EMAIL` | `noreply@logisticsystem.com` | Remitente emails |
+| `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` | `30` | Expiración token reset password |
+| `ACCOUNT_ACTIVATION_EXPIRE_HOURS` | `24` | Expiración token activación |
+| `FRONTEND_URL` | `http://localhost:5173` | URL del frontend para links de email |
 
 ## Transacciones y Migraciones
 
@@ -349,7 +407,7 @@ UniqueConstraint: `(shelf_id, product_id)` — mismo producto no puede estar dos
 
 ## Seed
 
-`app/seed.json` define permisos y roles iniciales. `app/core/seed.py` lo carga y crea usuario admin default (`admin@logistics.com` / `admin123`, super_admin) al primer arranque. Para agregar permisos/roles: editar seed.json + `app/core/permissions.py`. El seed es idempotente (solo corre si tabla permissions vacía).
+`app/seed.json` define permisos y roles iniciales. `app/core/seed.py` lo carga al primer arranque (idempotente: solo corre si tabla permissions vacía). Si se configuran `ADMIN_EMAIL` y `ADMIN_PASSWORD`, crea un usuario admin super_admin con rol Admin. Para agregar permisos/roles: editar seed.json + `app/core/permissions.py`.
 
 `scripts/seed_electrodomesticos.py` — seed masivo standalone: 200 productos, 200 estanterías, 200 usuarios con roles variados. Usa acceso directo a DB para velocidad.
 

@@ -6,18 +6,18 @@ from app.core.storage import get_image_url
 
 
 class UserCreate(BaseModel):
-    email: EmailStr = Field(..., examples=["usuario@email.com"])
+    email: EmailStr = Field(..., max_length=255, examples=["usuario@email.com"])
     password: str = Field(..., min_length=6, max_length=128)
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    city: str | None = None
-    country: str | None = None
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
+    city: str | None = Field(default=None, max_length=100)
+    country: str | None = Field(default=None, max_length=100)
 
 
 class UserLogin(BaseModel):
-    email: EmailStr = Field(..., examples=["usuario@email.com"])
-    password: str = Field(..., min_length=1)
+    email: EmailStr = Field(..., max_length=255, examples=["usuario@email.com"])
+    password: str = Field(..., min_length=6, max_length=128)
 
 
 class UserResponse(BaseModel):
@@ -50,11 +50,11 @@ class TokenResponse(BaseModel):
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     password: str | None = Field(default=None, min_length=6, max_length=128)
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    city: str | None = None
-    country: str | None = None
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
+    city: str | None = Field(default=None, max_length=100)
+    country: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
 
 
@@ -112,11 +112,11 @@ class UserProfileResponse(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    city: str | None = None
-    country: str | None = None
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
+    city: str | None = Field(default=None, max_length=100)
+    country: str | None = Field(default=None, max_length=100)
     password: str | None = Field(default=None, min_length=6, max_length=128)
 
 

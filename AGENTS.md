@@ -160,8 +160,15 @@ def name(self, value: str):
 - **Pagination**: `PaginationParams = Depends(get_pagination)` for query params. Return type `PaginatedResponse[T]`.
 - **Exceptions**: Custom `AppException` subclasses (`NotFoundException`, `ConflictException`, `ValidationException`, etc.). Global handler in `main.py`. Services NEVER raise `HTTPException`.
 - **Env vars**: `DATABASE_URL` (required), `SECRET_KEY` (required). Others have defaults. `.env` gitignored; `.env.example` exists.
-- **Rate limit**: 1000 requests per 60s window (configurable via `RATE_LIMIT_REQUESTS`, set to 0 to disable). Returns 429 `"Demasiadas solicitudes. Intenta de nuevo mas tarde."` per client IP.
+- **Rate limit**: 1000 requests per 60s window (configurable via `RATE_LIMIT_REQUESTS`, set to 0 to disable). Returns 429 `"Demasiadas solicitudes. Intenta de nuevo mas tarde."` per client IP. Endpoints forgot-password (5/min) y activate (10/min) tienen limiters independientes. In-memory, single-worker only.
 - **Imports**: Use `from __future__ import annotations` + `TYPE_CHECKING` for cross-module type hints to prevent circular imports.
+- **Logging**: `logging` estructurado (`logging.getLogger(__name__)`) en lugar de `print()`. Configurado en `main.py` con `logging.basicConfig`.
+- **Security headers**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`, `Referrer-Policy`, `Cache-Control` aplicados en middleware HTTP.
+- **Body size limit**: `REQUEST_BODY_MAX_SIZE_MB` (default 10). Retorna 413 si `content-length` excede el límite.
+- **SECRET_KEY**: Validación de longitud mínima 32 caracteres vía `@field_validator` en Settings.
+- **Admin seed**: Credenciales vía `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars. Sin hardcodeos. Si no se definen, no se crea admin.
+- **Docker**: Multi-stage build (gcc/libpq-dev solo en stage builder). `.dockerignore` excluye `.env`, `.git`, `venv/`, etc.
+- **CORS**: `CORS_ORIGINS` (list[str] en JSON). Vacío = `allow_origins=["*"]` sin credenciales. Con orígenes explícitos → `allow_credentials=True` y `Access-Control-Allow-Credentials: true`. Si el frontend usa `credentials: 'include'` o `Authorization`, configurar orígenes explícitos: `CORS_ORIGINS=["http://localhost:5173"]`. Pasar como env var en docker-compose para que no dependa solo del archivo `.env`.
 
 ## Filters (GENÉRICOS)
 
@@ -233,12 +240,16 @@ class LocalStorageBackend(StorageBackend): ...
 
 def get_storage() -> StorageBackend
 def generate_filename(prefix: str, original_filename: str) -> str
+def validate_file(file: UploadFile) -> None  # MIME type validation
 ```
 
 - Archivos guardados en `static/uploads/{entity}/{prefix}_{uuid}.{ext}`
 - Servidos vía `StaticFiles` en `main.py`: `app.mount("/static", StaticFiles(...))`
 - `image_url` en responses es campo computado vía `@model_validator(mode="after")`
 - `python-multipart` requerido para file uploads
+- **Validación MIME**: solo JPEG, PNG, WebP, GIF, SVG (`ALLOWED_IMAGE_TYPES` + `ALLOWED_IMAGE_EXTENSIONS`). Validado por `validate_file()` antes del upload.
+- **Límite 10MB** por archivo (`MAX_FILE_SIZE` en storage.py). También hay límite global de body (`REQUEST_BODY_MAX_SIZE_MB`).
+- Nombres de archivo generados con UUID para prevenir path traversal.
 
 ## Image handling (products + users)
 
@@ -331,7 +342,8 @@ class ShelfDetailResponse(ShelfResponse):
 
 `app/core/seed.py` crea al primer arranque:
 - Permisos y roles desde `seed.json`
-- Usuario admin: `admin@logistics.com` / `admin123` (is_super_admin=True, asignado al rol Admin)
+- Solo crea admin si se configuran `ADMIN_EMAIL` y `ADMIN_PASSWORD` en `.env` (sin credenciales hardcodeadas)
+- `is_super_admin=True`, asignado al rol Admin
 
 Idempotente: solo corre si tabla `permissions` está vacía.
 

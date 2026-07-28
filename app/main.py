@@ -1,3 +1,4 @@
+import logging
 import time
 
 from contextlib import asynccontextmanager
@@ -5,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.api import router as api_v1_router
@@ -14,6 +15,11 @@ from app.core.exceptions import AppException
 from app.core.rate_limit import rate_limit_middleware
 from app.core.seed import seed_defaults
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("app")
 
 STATIC_DIR = Path(settings.STORAGE_PATH)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -49,6 +55,29 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 
 
 @app.middleware("http")
+async def security_headers(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
+@app.middleware("http")
+async def body_size_limit(request: Request, call_next):
+    max_size = settings.REQUEST_BODY_MAX_SIZE_MB * 1024 * 1024
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > max_size:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": f"El cuerpo de la solicitud excede el límite de {settings.REQUEST_BODY_MAX_SIZE_MB}MB"},
+        )
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def rate_limit(request: Request, call_next):
     return await rate_limit_middleware(request, call_next)
 
@@ -58,7 +87,10 @@ async def log_requests(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
     duration = time.time() - start
-    print(f"  {request.method:7} {request.url.path:40} → {response.status_code} ({duration:.3f}s)")
+    logger.info(
+        "%s %s → %s (%.3fs)",
+        request.method, request.url.path, response.status_code, duration,
+    )
     return response
 
 

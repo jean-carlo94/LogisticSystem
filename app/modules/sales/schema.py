@@ -12,7 +12,7 @@ class SaleItemCreate(BaseModel):
 
 class SaleCreate(BaseModel):
     customer_name: str = Field(..., min_length=1, max_length=200)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=1000)
     items: list[SaleItemCreate] = Field(..., min_length=1)
 
 

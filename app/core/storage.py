@@ -10,6 +10,25 @@ from fastapi import UploadFile
 
 from app.core.config import settings
 
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/svg+xml",
+}
+
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
+
+def validate_file(file: UploadFile) -> None:
+    if file.content_type and file.content_type not in ALLOWED_IMAGE_TYPES:
+        _ext = os.path.splitext(file.filename or "")[1].lower()
+        if _ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError("Tipo de archivo no permitido. Solo se aceptan imágenes (JPEG, PNG, WebP, GIF, SVG).")
+
 
 class StorageBackend(ABC):
     @abstractmethod
@@ -30,10 +49,11 @@ class LocalStorageBackend(StorageBackend):
         self.base_dir = Path(base_dir)
 
     async def upload(self, file: UploadFile, relative_path: str) -> str:
+        validate_file(file)
         full_path = self.base_dir / relative_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         content = await file.read()
-        if len(content) > 10 * 1024 * 1024:
+        if len(content) > MAX_FILE_SIZE:
             raise ValueError("El archivo excede el límite de 10MB")
         import aiofiles
         async with aiofiles.open(full_path, "wb") as f:
@@ -79,8 +99,9 @@ class S3StorageBackend(StorageBackend):
         )
 
     async def upload(self, file: UploadFile, relative_path: str) -> str:
+        validate_file(file)
         content = await file.read()
-        if len(content) > 10 * 1024 * 1024:
+        if len(content) > MAX_FILE_SIZE:
             raise ValueError("El archivo excede el límite de 10MB")
 
         content_type = file.content_type or "application/octet-stream"

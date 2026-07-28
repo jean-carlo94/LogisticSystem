@@ -1,6 +1,9 @@
 import asyncio
+import logging
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 _RESEND_READY = False
 
@@ -20,7 +23,7 @@ class EmailSender:
     async def send(self, to: str, subject: str, html: str) -> dict | None:
         _init_resend()
         if not _RESEND_READY:
-            print(f"[email] RESEND_API_KEY not configured, skipping email to {to}")
+            logger.debug("RESEND_API_KEY not configured, skipping email to %s", to)
             return None
 
         import resend
@@ -39,9 +42,9 @@ class EmailSender:
                 timeout=10.0,
             )
         except asyncio.TimeoutError:
-            print(f"[email] Timeout sending to {to}")
+            logger.error("Timeout sending email to %s", to)
             return None
-        print(f"[email] Sent to {to}: {result.get('id', 'unknown')}")
+        logger.info("Email sent to %s: %s", to, result.get("id", "unknown"))
         return result
 
 

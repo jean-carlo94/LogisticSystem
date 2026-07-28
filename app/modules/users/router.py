@@ -95,6 +95,15 @@ async def reset_password(
     return MessageResponse(message="Contrasena actualizada correctamente")
 
 
+@auth_router.get("/activate", response_model=MessageResponse)
+async def activate_account_get(
+    token: str = Query(..., min_length=1, max_length=256, description="Token de activación"),
+    service: UserService = Depends(get_user_service),
+) -> MessageResponse:
+    await service.activate_account(token)
+    return MessageResponse(message="Cuenta activada correctamente")
+
+
 @auth_router.post("/activate", response_model=MessageResponse)
 async def activate_account(
     data: ActivationRequest,

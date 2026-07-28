@@ -1,4 +1,7 @@
+import asyncio
 import hashlib
+import logging
+import random
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -18,6 +21,8 @@ from app.modules.users.schema import (
     RoleInfo, TokenResponse, UserCreate, UserLogin, UserProfileResponse,
     UserProfileUpdate, UserUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -71,7 +76,7 @@ class UserService:
         try:
             await self.email.send(user.email, "Activa tu cuenta", html)
         except Exception as e:
-            print(f"[email] Failed to send activation to {user.email}: {e}")
+            logger.error("Failed to send activation email to %s: %s", user.email, e)
             from app.core.exceptions import AppException
             raise AppException("No se pudo enviar el email de activacion. Por favor intenta de nuevo.", 500)
 
@@ -222,6 +227,7 @@ class UserService:
     async def request_password_reset(self, email: str) -> None:
         user = await self.repo.find_by_email(email)
         if not user or not user.is_active:
+            await asyncio.sleep(random.uniform(0.1, 0.3))
             return
 
         await self.repo.invalidate_user_tokens(user.id)
@@ -250,7 +256,7 @@ class UserService:
         try:
             await self.email.send(user.email, "Recuperacion de contrasena", html)
         except Exception as e:
-            print(f"[email] Failed to send reset to {user.email}: {e}")
+            logger.error("Failed to send reset email to %s: %s", user.email, e)
 
     async def reset_password(self, token: str, new_password: str) -> None:
         token_hash = hashlib.sha256(token.encode()).hexdigest()

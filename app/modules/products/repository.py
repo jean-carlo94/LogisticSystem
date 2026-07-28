@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.core.repository import BaseRepository
@@ -23,10 +23,27 @@ class ProductRepository(BaseRepository):
         )
         return result.all()
 
+    async def validate_category_ids(self, category_ids: list[int]) -> None:
+        from app.modules.categories.model import Category
+
+        existing = await self.db.scalars(
+            select(func.count(Category.id)).where(Category.id.in_(category_ids))
+        )
+        if existing != len(category_ids):
+            existing_ids = await self.db.scalars(
+                select(Category.id).where(Category.id.in_(category_ids))
+            )
+            found = set(existing_ids.all())
+            missing = set(category_ids) - found
+            raise ValueError(f"Categorías no encontradas: {missing}")
+
     async def set_product_categories(
         self, product_id: int, category_ids: list[int]
     ) -> None:
         from app.modules.categories.model import ProductCategory
+
+        if category_ids:
+            await self.validate_category_ids(category_ids)
 
         existing = await self.db.scalars(
             select(ProductCategory).where(ProductCategory.product_id == product_id)

@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import settings
 from app.core.database import _get_sessionmaker
 from app.core.security import hash_password
 from app.modules.roles.model import Permission, Role, RolePermission, UserRole
@@ -61,22 +62,26 @@ async def seed_defaults():
                         permission_id=perm_map[code],
                     ))
 
-        admin = await db.scalar(
-            select(User).where(User.email == "admin@logistics.com")
-        )
-        if not admin:
-            admin_role = await db.scalar(select(Role).where(Role.name == "Admin"))
-            admin = User(
-                email="admin@logistics.com",
-                hashed_password=hash_password("admin123"),
-                first_name="Admin",
-                is_active=True,
-                is_super_admin=True,
+        admin_email = settings.ADMIN_EMAIL
+        admin_password = settings.ADMIN_PASSWORD
+
+        if admin_email and admin_password:
+            admin = await db.scalar(
+                select(User).where(User.email == admin_email)
             )
-            db.add(admin)
-            await db.flush()
-            if admin_role:
-                db.add(UserRole(user_id=admin.id, role_id=admin_role.id))
+            if not admin:
+                admin_role = await db.scalar(select(Role).where(Role.name == "Admin"))
+                admin = User(
+                    email=admin_email,
+                    hashed_password=hash_password(admin_password),
+                    first_name="Admin",
+                    is_active=True,
+                    is_super_admin=True,
+                )
+                db.add(admin)
+                await db.flush()
+                if admin_role:
+                    db.add(UserRole(user_id=admin.id, role_id=admin_role.id))
 
         try:
             await db.commit()
