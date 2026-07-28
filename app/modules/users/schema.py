@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
 
 from app.core.storage import get_image_url
 
@@ -30,16 +30,15 @@ class UserResponse(BaseModel):
     country: str | None = None
     is_active: bool
     image_path: str | None = None
-    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def set_image_url(self) -> "UserResponse":
-        self.image_url = get_image_url(self.image_path)
-        return self
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return get_image_url(self.image_path)
 
 
 class TokenResponse(BaseModel):
@@ -69,16 +68,15 @@ class UserAdminResponse(BaseModel):
     is_active: bool
     is_super_admin: bool
     image_path: str | None = None
-    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def set_image_url(self) -> "UserAdminResponse":
-        self.image_url = get_image_url(self.image_path)
-        return self
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return get_image_url(self.image_path)
 
 
 class RoleInfo(BaseModel):
@@ -97,18 +95,17 @@ class UserProfileResponse(BaseModel):
     is_active: bool
     is_super_admin: bool
     image_path: str | None = None
-    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
     roles: list[RoleInfo] = []
     permissions: list[str] = []
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def set_image_url(self) -> "UserProfileResponse":
-        self.image_url = get_image_url(self.image_path)
-        return self
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return get_image_url(self.image_path)
 
 
 class UserProfileUpdate(BaseModel):
@@ -121,7 +118,7 @@ class UserProfileUpdate(BaseModel):
 
 
 class UserAssignRole(BaseModel):
-    role_id: int
+    role_id: int = Field(..., gt=0)
 
 
 class ForgotPasswordRequest(BaseModel):

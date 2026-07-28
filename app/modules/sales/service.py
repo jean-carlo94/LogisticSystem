@@ -44,19 +44,24 @@ class SaleService:
         if not data.items:
             raise ValidationException("La venta debe tener al menos un producto")
 
+        product_ids = [i.product_id for i in data.items]
+        products = await self.shelf_item_repo.get_products_by_ids(product_ids)
+        products_map = {p.id: p for p in products}
+
+        shelf_items = await self.shelf_item_repo.get_items_by_product_ids(product_ids)
+        shelf_items_map = {(si.shelf_id, si.product_id): si for si in shelf_items}
+
         total = 0.0
         items_deducted = []
 
         for item_in in data.items:
-            product = await self.product_repo.get_by_id(item_in.product_id)
+            product = products_map.get(item_in.product_id)
             if not product:
                 raise NotFoundException(
                     f"Producto {item_in.product_id} no encontrado"
                 )
 
-            shelf_item = await self.shelf_item_repo.get_by_shelf_product(
-                item_in.shelf_id, item_in.product_id
-            )
+            shelf_item = shelf_items_map.get((item_in.shelf_id, item_in.product_id))
             if not shelf_item:
                 raise NotFoundException(
                     f"Producto {item_in.product_id} no asignado a la estantería "
@@ -92,11 +97,12 @@ class SaleService:
                     {"quantity": new_shelf_qty},
                 )
 
+            original_stock = product.stock
             new_stock = product.stock - item_in.quantity
             await self.product_repo.update(product, stock=new_stock)
             await self.audit.log_update(
                 "Product", product.id, user_id,
-                {"stock": new_stock, "previous_stock": product.stock + item_in.quantity},
+                {"stock": new_stock, "previous_stock": original_stock},
             )
 
             items_deducted.append({

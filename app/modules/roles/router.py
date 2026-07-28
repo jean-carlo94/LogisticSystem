@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
-from app.core.security import get_current_user, require_permission
+from app.core.security import require_permission
 from app.modules.roles.deps import get_role_service
 from app.modules.roles.schema import (
     AssignPermissionsRequest, AssignRoleRequest, PermissionResponse,
@@ -34,7 +34,7 @@ async def list_roles(
     name: str | None = Query(default=None, description="Nombre del rol (único)"),
     filters: dict = FilterParams,
     service: RoleService = Depends(get_role_service),
-    _user: "User" = Depends(get_current_user),
+    _user: "User" = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
     merged = dict(filters)
     if name is not None:
@@ -84,7 +84,7 @@ async def assign_permissions(
 async def get_role_permissions(
     role_id: int,
     service: RoleService = Depends(get_role_service),
-    _user: "User" = Depends(get_current_user),
+    _user: "User" = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
     return await service.get_permissions(role_id)
 

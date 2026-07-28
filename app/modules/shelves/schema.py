@@ -56,7 +56,7 @@ class ShelfDetailResponse(ShelfResponse):
 
 
 class ShelfItemCreate(BaseModel):
-    product_id: int
+    product_id: int = Field(..., gt=0)
     quantity: int = Field(default=1, ge=1)
 
 

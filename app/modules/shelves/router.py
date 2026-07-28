@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import JSONResponse
 
 from app.core.exceptions import NotFoundException
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
@@ -86,15 +87,18 @@ async def add_item_to_shelf(
     return await service.add_item(shelf_id, data, user.id)
 
 
-@router.put("/{shelf_id}/items/{item_id}", response_model=ShelfItemResponse)
+@router.put("/{shelf_id}/items/{item_id}")
 async def update_item_quantity(
     shelf_id: int,
     item_id: int,
     data: ShelfItemUpdate,
     service: ShelfService = Depends(get_shelf_service),
     user: "User" = Depends(require_permission(PermissionCode.SHELVES_UPDATE)),
-) -> ShelfItemResponse:
-    return await service.update_item(shelf_id, item_id, data, user.id)
+):
+    result = await service.update_item(shelf_id, item_id, data, user.id)
+    if result is None:
+        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT)
+    return result
 
 
 @router.delete("/{shelf_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

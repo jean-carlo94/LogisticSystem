@@ -13,12 +13,12 @@ class PermissionResponse(BaseModel):
 
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=500)
 
 
 class RoleUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=500)
 
 
 class RoleResponse(BaseModel):
@@ -32,9 +32,9 @@ class RoleResponse(BaseModel):
 
 
 class AssignPermissionsRequest(BaseModel):
-    permission_ids: list[int]
+    permission_ids: list[int] = Field(..., min_length=1)
 
 
 class AssignRoleRequest(BaseModel):
-    user_id: int
-    role_id: int
+    user_id: int = Field(..., gt=0)
+    role_id: int = Field(..., gt=0)

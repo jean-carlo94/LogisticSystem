@@ -151,7 +151,7 @@ class ShelfService:
 
     async def update_item(
         self, shelf_id: int, item_id: int, data: ShelfItemUpdate, user_id: int
-    ) -> ShelfItem:
+    ) -> ShelfItem | None:
         shelf = await self.shelf_repo.get_by_id(shelf_id)
         if not shelf:
             raise NotFoundException("Estantería no encontrada")
@@ -173,7 +173,7 @@ class ShelfService:
         if data.quantity == 0:
             await self.item_repo.delete(item)
             await self.audit.log_delete("ShelfItem", item_id, user_id, item)
-            return item
+            return None
 
         item = await self.item_repo.update(item, quantity=data.quantity)
         await self.audit.log_update("ShelfItem", item_id, user_id, {"quantity": data.quantity})

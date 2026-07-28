@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.core.storage import get_image_url
 from app.modules.products.enums import ProductState
@@ -49,17 +49,16 @@ class CategoryInfo(BaseModel):
 class ProductResponse(ProductBase):
     id: int
     image_path: str | None = None
-    image_url: str | None = None
     create_at: datetime
     update_at: datetime
     categories: list[CategoryInfo] = []
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def set_image_url(self) -> "ProductResponse":
-        self.image_url = get_image_url(self.image_path)
-        return self
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return get_image_url(self.image_path)
 
 
 class ShelfInfo(BaseModel):

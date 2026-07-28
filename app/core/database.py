@@ -63,9 +63,15 @@ class Base(DeclarativeBase):
         if isinstance(col_type, Boolean):
             return value.lower() in ("true", "1", "yes")
         if isinstance(col_type, Integer):
-            return int(value)
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return None
         if isinstance(col_type, Float):
-            return float(value)
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
         if isinstance(col_type, SAEnum):
             try:
                 return col_type.enum_class(value)

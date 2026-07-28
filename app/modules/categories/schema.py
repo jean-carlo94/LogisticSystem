@@ -18,5 +18,6 @@ class CategoryResponse(BaseModel):
     name: str
     description: str | None = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

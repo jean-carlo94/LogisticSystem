@@ -26,8 +26,6 @@ class SaleItemResponse(BaseModel):
     unit_price: float
     subtotal: float
 
-    model_config = {"from_attributes": True}
-
 
 class SaleResponse(BaseModel):
     id: int

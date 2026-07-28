@@ -39,8 +39,8 @@ class ProductCategory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     product_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
     )
     category_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False, index=True
     )
