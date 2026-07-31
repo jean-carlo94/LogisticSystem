@@ -100,6 +100,10 @@ class OrderService:
 
         order = await self.order_repo.create(
             customer_name=data.customer_name,
+            customer_email=data.customer_email,
+            customer_phone=data.customer_phone,
+            customer_document=data.customer_document,
+            customer_address=data.customer_address,
             total=round(total, 2),
             status=OrderStatus.CREATED,
             notes=data.notes,
@@ -176,8 +180,10 @@ class OrderService:
             ],
         )
 
+        prev_tenant = current_tenant_id.get()
         current_tenant_id.set(order.tenant_id)
         await self.sale_service.create(sale_data, user_id)
+        current_tenant_id.set(prev_tenant)
 
         previous_status = order.status
         await self.order_repo.update(order, status=OrderStatus.DELIVERED)
@@ -230,6 +236,11 @@ class OrderService:
         return OrderDetailResponse(
             id=order.id,
             customer_name=order.customer_name,
+            customer_email=order.customer_email,
+            customer_phone=order.customer_phone,
+            customer_document=order.customer_document,
+            customer_address=order.customer_address,
+            customer_id=order.customer_id,
             total=order.total,
             status=order.status,
             notes=order.notes,

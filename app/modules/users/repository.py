@@ -64,7 +64,10 @@ class UserRepository(BaseRepository):
 
     async def role_exists(self, role_id: int) -> bool:
         from app.modules.roles.model import Role
-        return await self.db.get(Role, role_id) is not None
+        role = await self.db.get(Role, role_id)
+        if role is None or self._tenant_id is None:
+            return role is not None
+        return role.tenant_id == self._tenant_id
 
     async def has_sales(self, user_id: int) -> bool:
         from app.modules.sales.model import Sale

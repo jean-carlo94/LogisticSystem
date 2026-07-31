@@ -111,9 +111,12 @@ class ProductRepository(BaseRepository):
     async def get_product_locations(self, product_id: int):
         from app.modules.shelves.model import Shelf, ShelfItem
 
-        items = await self.db.scalars(
-            select(ShelfItem).where(ShelfItem.product_id == product_id)
-        )
+        stmt = select(ShelfItem).where(ShelfItem.product_id == product_id)
+        if self._tenant_id is not None:
+            stmt = stmt.join(Shelf, Shelf.id == ShelfItem.shelf_id).where(
+                Shelf.tenant_id == self._tenant_id
+            )
+        items = await self.db.scalars(stmt)
         shelf_items = items.all()
 
         if not shelf_items:

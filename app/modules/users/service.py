@@ -12,7 +12,7 @@ from fastapi import UploadFile
 from app.core.audit import AuditLogger
 from app.core.config import settings
 from app.core.email import EmailSender
-from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException
+from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException, ValidationException
 from app.core.pagination import PaginatedResponse
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.storage import generate_filename, get_storage
@@ -138,10 +138,15 @@ class UserService:
         return [RoleInfo(id=r.id, tenant_id=r.tenant_id, name=r.name) for r in roles]
 
     async def assign_role(self, user_id: int, role_id: int) -> None:
-        if not await self.repo.get_by_id(user_id):
+        from app.modules.roles.model import Role
+        user = await self.repo.get_by_id(user_id)
+        if not user:
             raise NotFoundException("Usuario no encontrado")
-        if not await self.repo.role_exists(role_id):
+        role = await self.repo.db.get(Role, role_id)
+        if not role:
             raise NotFoundException("Rol no encontrado")
+        if user.tenant_id is not None and user.tenant_id != role.tenant_id:
+            raise ValidationException("Usuario y rol deben pertenecer al mismo tenant")
         await self.repo.assign_role(user_id, role_id)
 
     async def get_profile(self, user: User) -> UserProfileResponse:

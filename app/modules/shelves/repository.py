@@ -8,7 +8,10 @@ class ShelfRepository(BaseRepository):
     model = Shelf
 
     async def get_by_code(self, code: str) -> Shelf | None:
-        return await self.db.scalar(select(Shelf).where(Shelf._code == code))
+        stmt = select(Shelf).where(Shelf._code == code)
+        if self._tenant_id is not None:
+            stmt = stmt.where(Shelf.tenant_id == self._tenant_id)
+        return await self.db.scalar(stmt)
 
     async def get_shelves_by_ids(self, shelf_ids: list[int]) -> list[Shelf]:
         stmt = select(Shelf).where(Shelf.id.in_(shelf_ids))

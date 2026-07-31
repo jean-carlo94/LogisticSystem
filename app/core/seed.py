@@ -80,6 +80,7 @@ async def seed_tenant_roles(tenant_id: int, db=None):
                         permission_id=perm_map[code],
                     ))
 
+        await session.flush()
         await session.commit()
 
     if db is not None:
