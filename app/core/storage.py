@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import UploadFile
 
 from app.core.config import settings
+from app.core.exceptions import ValidationException
 
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
@@ -23,7 +24,7 @@ def validate_file(file: UploadFile) -> None:
     if file.content_type and file.content_type not in ALLOWED_IMAGE_TYPES:
         _ext = os.path.splitext(file.filename or "")[1].lower()
         if _ext not in ALLOWED_IMAGE_EXTENSIONS:
-            raise ValueError("Tipo de archivo no permitido. Solo se aceptan imágenes (JPEG, PNG, WebP, GIF, SVG).")
+            raise ValidationException("Tipo de archivo no permitido. Solo se aceptan imágenes (JPEG, PNG, WebP, GIF, SVG).")
 
 
 class LocalStorageBackend:
@@ -36,7 +37,7 @@ class LocalStorageBackend:
         full_path.parent.mkdir(parents=True, exist_ok=True)
         content = await file.read()
         if len(content) > MAX_FILE_SIZE:
-            raise ValueError("El archivo excede el límite de 10MB")
+            raise ValidationException("El archivo excede el límite de 10MB")
         import aiofiles
         async with aiofiles.open(full_path, "wb") as f:
             await f.write(content)

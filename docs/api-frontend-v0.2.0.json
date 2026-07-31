@@ -1,11 +1,33 @@
 {
-  "_version": "0.3.0",
-  "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API.",
+  "_version": "0.4.0",
+  "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API. Incluye multitenant.",
 
   "base_url": "http://localhost:8000/api/v1",
   "auth_header": "Authorization: Bearer {token}",
   "content_type": "application/json",
   "content_type_upload": "multipart/form-data",
+
+  "multitenant": {
+    "_resumen": "Sistema multitenant con schema compartido. Cada usuario pertenece a un tenant (empresa). Los datos se aíslan automáticamente: productos, ventas, pedidos, estanterías, categorías, etc. no se cruzan entre tenants.",
+    "platform_admin": {
+      "quien": "Usuario con is_super_admin=true y tenant_id=null",
+      "sin_header": "Ve TODOS los tenants combinados (sin filtrar)",
+      "con_header": "Usa header X-Tenant: <slug> para switchear a un tenant específico y ver solo sus datos",
+      "crear_tenant": "POST /tenants/ (requiere permiso tenants_manage, solo platform admin)"
+    },
+    "tenant_user": {
+      "quien": "Usuario con tenant_id asignado",
+      "comportamiento": "Automáticamente solo ve/modifica datos de su propio tenant. No necesita header adicional.",
+      "jwt": "El JWT incluye el campo 'tid' con el tenant_id"
+    },
+    "reglas_frontend": [
+      "Si el usuario es platform admin (is_super_admin=true), mostrar selector de tenant en la UI.",
+      "Al seleccionar un tenant, enviar header X-Tenant: acme-corp en todas las requests.",
+      "Si el usuario NO es platform admin, no mostrar selector de tenant. El scoping es automático.",
+      "Las respuestas de API no incluyen tenant_id en el JSON (es interno). El frontend no necesita manejarlo.",
+      "Para obtener la lista de tenants disponibles: GET /tenants/ (solo platform admin)."
+    ]
+  },
 
   "respuestas_de_error": {
     "400": { "detail": "string — mensaje de validación" },
@@ -36,10 +58,11 @@
       "Float": "== exacto — debe coincidir el número completo",
       "Boolean": "== exacto — true|false (acepta: true/false, 1/0, yes/no)",
       "Enum": "== exacto — debe coincidir el valor del enum (ej: ACTIVE)",
-      "DateTime": "no soportado como filtro"
+      "DateTime": "DATE range — filtra por día exacto usando formato YYYY-MM-DD. Hace >= date AND < date+1d. Ej: ?created_at=2026-07-31"
     },
     "campos_bloqueados": {
-      "User.hashed_password": "ignorado, nunca filtra por seguridad"
+      "User.hashed_password": "ignorado, nunca filtra por seguridad",
+      "*.tenant_id": "ignorado en todas las entidades, gestionado automáticamente por el sistema multitenant"
     },
     "combinacion": "Múltiples filtros se combinan con AND. Parámetros page/size están reservados y no se usan como filtro.",
     "propiedades_con_setter": "Campos como Product.name, Product.price, Product.stock usan @property. El sistema los resuelve automáticamente al atributo privado (_name, _price, _stock). El frontend usa siempre el nombre público.",
@@ -62,13 +85,15 @@
         "height_cm": { "tipo": "float (=)", "ejemplo": "?height_cm=5" },
         "depth_cm": { "tipo": "float (=)", "ejemplo": "?depth_cm=5" },
         "image_path": { "tipo": "string (ILIKE)", "ejemplo": "?image_path=products/x.jpg" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "create_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?create_at=2026-07-31" },
+        "update_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?update_at=2026-07-31" }
       },
       "ejemplos_combinados": [
         "GET /products/?state=ACTIVE&stock=100",
         "GET /products/?name=tornillo&price=0.5",
         "GET /products/?barcode=BAR-001",
-        "GET /products/?name=mart (encuentra 'Martillo grande')"
+        "GET /products/?create_at=2026-07-31"
       ]
     },
     "users": {
@@ -84,12 +109,15 @@
         "is_super_admin": { "tipo": "bool (=)", "ejemplo": "?is_super_admin=false" },
         "image_path": { "tipo": "string (ILIKE)", "ejemplo": "?image_path=users/x.jpg" },
         "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "hashed_password": { "tipo": "BLOQUEADO — ignorado" }
+        "hashed_password": { "tipo": "BLOQUEADO — ignorado" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
       },
       "ejemplos_combinados": [
         "GET /users/?is_active=true&country=Chile",
         "GET /users/?email=admin@logistics.com",
-        "GET /users/?first_name=Admin&city=santiago (ILIKE encuentra 'Santiago')"
+        "GET /users/?first_name=Admin&city=santiago (ILIKE encuentra 'Santiago')",
+        "GET /users/?created_at=2026-07-31"
       ]
     },
     "shelves": {
@@ -104,13 +132,16 @@
         "width_cm": { "tipo": "float (=)", "ejemplo": "?width_cm=100" },
         "height_cm": { "tipo": "float (=)", "ejemplo": "?height_cm=50" },
         "depth_cm": { "tipo": "float (=)", "ejemplo": "?depth_cm=40" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
       },
       "ejemplos_combinados": [
         "GET /shelves/?aisle=A&row=1",
         "GET /shelves/?code=A-01-01",
         "GET /shelves/?name=estante+principal (ILIKE)",
-        "GET /shelves/?level=3&max_weight_kg=200"
+        "GET /shelves/?level=3&max_weight_kg=200",
+        "GET /shelves/?created_at=2026-07-31"
       ]
     },
     "roles": {
@@ -118,11 +149,14 @@
       "todos_los_campos": {
         "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=admin" },
         "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=admin" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
       },
       "ejemplos_combinados": [
         "GET /roles/?name=Admin",
-        "GET /roles/?description=rol"
+        "GET /roles/?description=rol",
+        "GET /roles/?created_at=2026-07-31"
       ]
     },
     "events": {
@@ -133,12 +167,120 @@
         "action": { "tipo": "enum (=)", "ejemplo": "?action=CREATE" },
         "user_id": { "tipo": "int (=)", "ejemplo": "?user_id=1" },
         "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=creado" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" }
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "create_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?create_at=2026-07-31" }
       },
       "ejemplos_combinados": [
         "GET /events/?action=CREATE&entity_type=Product",
         "GET /events/?user_id=1",
-        "GET /events/?action=DELETE&entity_type=Product"
+        "GET /events/?action=DELETE&entity_type=Product",
+        "GET /events/?create_at=2026-07-31"
+      ]
+    },
+    "tenants": {
+      "documentado_swagger": "name, slug",
+      "todos_los_campos": {
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=acme" },
+        "slug": { "tipo": "string (ILIKE)", "ejemplo": "?slug=acme-corp" },
+        "is_active": { "tipo": "bool (=)", "ejemplo": "?is_active=true" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+      },
+      "ejemplos_combinados": [
+        "GET /tenants/?is_active=true",
+        "GET /tenants/?name=acme",
+        "GET /tenants/?created_at=2026-07-31"
+      ]
+    },
+    "categories": {
+      "documentado_swagger": "name",
+      "todos_los_campos": {
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=elec" },
+        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=productos" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+      },
+      "ejemplos_combinados": [
+        "GET /categories/?name=elec",
+        "GET /categories/?created_at=2026-07-31"
+      ]
+    },
+    "sales": {
+      "documentado_swagger": "ninguno (solo page/size)",
+      "todos_los_campos": {
+        "customer_name": { "tipo": "string (ILIKE)", "ejemplo": "?customer_name=juan" },
+        "customer_email": { "tipo": "string (ILIKE)", "ejemplo": "?customer_email=cliente" },
+        "customer_phone": { "tipo": "string (ILIKE)", "ejemplo": "?customer_phone=+569" },
+        "customer_document": { "tipo": "string (ILIKE)", "ejemplo": "?customer_document=12345678" },
+        "customer_address": { "tipo": "string (ILIKE)", "ejemplo": "?customer_address=santiago" },
+        "status": { "tipo": "enum (=)", "ejemplo": "?status=COMPLETED" },
+        "total": { "tipo": "float (=)", "ejemplo": "?total=15000" },
+        "notes": { "tipo": "string (ILIKE)", "ejemplo": "?notes=urgente" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" }
+      },
+      "ejemplos_combinados": [
+        "GET /sales/?status=COMPLETED",
+        "GET /sales/?customer_name=juan&status=CANCELLED",
+        "GET /sales/?created_at=2026-07-31"
+      ]
+    },
+    "orders": {
+      "documentado_swagger": "ninguno (solo page/size)",
+      "todos_los_campos": {
+        "customer_name": { "tipo": "string (ILIKE)", "ejemplo": "?customer_name=juan" },
+        "customer_email": { "tipo": "string (ILIKE)", "ejemplo": "?customer_email=cliente" },
+        "customer_phone": { "tipo": "string (ILIKE)", "ejemplo": "?customer_phone=+569" },
+        "customer_document": { "tipo": "string (ILIKE)", "ejemplo": "?customer_document=12345678" },
+        "customer_address": { "tipo": "string (ILIKE)", "ejemplo": "?customer_address=santiago" },
+        "status": { "tipo": "enum (=)", "ejemplo": "?status=CREATED" },
+        "total": { "tipo": "float (=)", "ejemplo": "?total=25000" },
+        "notes": { "tipo": "string (ILIKE)", "ejemplo": "?notes=entregar" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+      },
+      "ejemplos_combinados": [
+        "GET /orders/?status=CREATED",
+        "GET /orders/?customer_email=cliente&status=DELIVERED",
+        "GET /orders/?created_at=2026-07-31"
+      ]
+    },
+    "taxes": {
+      "documentado_swagger": "name",
+      "todos_los_campos": {
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=iva" },
+        "rate": { "tipo": "float (=)", "ejemplo": "?rate=19" },
+        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=impuesto" },
+        "is_active": { "tipo": "bool (=)", "ejemplo": "?is_active=true" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+      },
+      "ejemplos_combinados": [
+        "GET /taxes/?is_active=true",
+        "GET /taxes/?name=iva&rate=19",
+        "GET /taxes/?created_at=2026-07-31"
+      ]
+    },
+    "customers": {
+      "documentado_swagger": "email, document",
+      "todos_los_campos": {
+        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=juan" },
+        "email": { "tipo": "string (ILIKE)", "ejemplo": "?email=juan@test.com" },
+        "phone": { "tipo": "string (ILIKE)", "ejemplo": "?phone=+569" },
+        "document": { "tipo": "string (ILIKE)", "ejemplo": "?document=12345678" },
+        "address": { "tipo": "string (ILIKE)", "ejemplo": "?address=santiago" },
+        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
+        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
+        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+      },
+      "ejemplos_combinados": [
+        "GET /customers/?email=juan@test.com",
+        "GET /customers/?document=12345678",
+        "GET /customers/?created_at=2026-07-31"
       ]
     }
   },
@@ -171,7 +313,9 @@
           "image_path": "string|null",
           "image_url": "string|null (ej: /static/uploads/products/product_5_abc.jpg)",
           "create_at": "ISO8601 datetime",
-          "update_at": "ISO8601 datetime"
+          "update_at": "ISO8601 datetime",
+          "categories": "[{id: int, name: string}]",
+          "taxes": "[{id: int, name: string, rate: float}]"
         },
         "frontend_notes": [
           "image_url se construye concatenando el base_url del server. Si es null, mostrar placeholder.",
@@ -202,9 +346,11 @@
           "weight_kg": "float (>=0, default 0)",
           "width_cm": "float (>=0, default 0)",
           "height_cm": "float (>=0, default 0)",
-          "depth_cm": "float (>=0, default 0)"
+          "depth_cm": "float (>=0, default 0)",
+          "category_ids": "list[int] (default [], IDs de categorías a asignar)",
+          "tax_ids": "list[int] (default [], IDs de impuestos a asignar)"
         },
-        "response_shape": "mismo que list.items[0] (201 Created)",
+        "response_shape": "mismo que list.items[0] (201 Created, incluye categories y taxes)",
         "errores": {
           "409": "Si barcode ya existe: 'El código de barras ya está en uso'"
         },
@@ -684,6 +830,107 @@
       }
     },
 
+    "taxes": {
+      "_intro": "Impuestos que se aplican a productos. Un producto puede tener múltiples impuestos (similar a categorías). Al crear una venta, los impuestos se calculan automáticamente desde los taxes asignados al producto.",
+
+      "list": {
+        "method": "GET",
+        "path": "/taxes/",
+        "auth": "taxes_read",
+        "query": { "page": "int", "size": "int", "name": "string (ILIKE, documentado en Swagger)" },
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "name": "string (ej: 'IVA 19%')",
+          "rate": "float (porcentaje, ej: 19.0)",
+          "description": "string|null",
+          "is_active": "bool",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "name usa ILIKE: ?name=iva encuentra 'IVA 19%'."
+        ]
+      },
+      "create": {
+        "method": "POST",
+        "path": "/taxes/",
+        "auth": "taxes_manage",
+        "request_body": {
+          "name": "string (1-100, requerido, único por tenant)",
+          "rate": "float (requerido, >0, ej: 19.0 para 19%)",
+          "description": "string|null (max 500)"
+        },
+        "response_shape": "mismo que list.items[0] (201 Created)",
+        "errores": { "409": "Si name ya existe: 'El impuesto ya existe'" }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/taxes/{id}",
+        "auth": "taxes_manage",
+        "request_body": "Todos opcionales (name, rate, description, is_active)",
+        "response_shape": "mismo que list.items[0]"
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/taxes/{id}",
+        "auth": "taxes_manage",
+        "response": "204 No Content"
+      }
+    },
+
+    "customers": {
+      "_intro": "Clientes del tenant. Se crean automáticamente al hacer una venta/pedido con email o documento. Si el cliente ya existe (mismo email o documento), se reutiliza.",
+
+      "list": {
+        "method": "GET",
+        "path": "/customers/",
+        "auth": "customers_read",
+        "query": { "page": "int", "size": "int", "email": "string (ILIKE)", "document": "string (ILIKE)" },
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "name": "string",
+          "email": "string|null",
+          "phone": "string|null",
+          "document": "string|null (RUT/DNI/CUIT)",
+          "address": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "Búsqueda por email: ?email=juan@test.com",
+          "Búsqueda por documento: ?document=12345678"
+        ]
+      },
+      "create": {
+        "method": "POST",
+        "path": "/customers/",
+        "auth": "customers_manage",
+        "request_body": {
+          "name": "string (1-200, requerido)",
+          "email": "string|null (max 255)",
+          "phone": "string|null (max 30)",
+          "document": "string|null (max 30)",
+          "address": "string|null (max 500)"
+        },
+        "response_shape": "mismo que list.items[0] (201 Created)"
+      },
+      "get_one": {
+        "method": "GET",
+        "path": "/customers/{id}",
+        "auth": "customers_read",
+        "response_shape": "mismo que list.items[0]"
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/customers/{id}",
+        "auth": "customers_manage",
+        "request_body": "Todos opcionales (name, email, phone, document, address)",
+        "response_shape": "mismo que list.items[0]"
+      }
+    },
+
     "sales": {
       "_intro": "Las ventas descuentan stock del producto y opcionalmente de estantería. Si shelf_id es null, solo descuenta stock del producto. Si shelf_id está presente, descuenta de la estantería Y del producto.",
 
@@ -691,10 +938,15 @@
         "method": "GET",
         "path": "/sales/",
         "auth": "sales_read",
-        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), status (=), total (=), notes (ILIKE)" },
+        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), customer_email (ILIKE), status (=), total (=), notes (ILIKE)" },
         "response_shape": {
           "id": "int",
           "customer_name": "string",
+          "customer_email": "string|null",
+          "customer_phone": "string|null",
+          "customer_document": "string|null",
+          "customer_address": "string|null",
+          "customer_id": "int|null",
           "total": "float",
           "status": "string (COMPLETED|CANCELLED)",
           "notes": "string|null",
@@ -708,11 +960,15 @@
         "auth": "sales_create",
         "request_body": {
           "customer_name": "string (1-200, requerido)",
+          "customer_email": "string|null (opcional, si se envía se busca/reutiliza cliente existente)",
+          "customer_phone": "string|null (max 30)",
+          "customer_document": "string|null (max 30, RUT/DNI/CUIT)",
+          "customer_address": "string|null (max 500)",
           "notes": "string|null (max 1000)",
           "items": [
             {
               "product_id": "int (requerido)",
-              "shelf_id": "int|null (default null. Si null → solo descuenta stock producto. Si tiene valor → descuenta estantería + producto)",
+              "shelf_id": "int|null (default null)",
               "quantity": "int (>=1, requerido)",
               "unit_price": "float (>0, requerido)"
             }
@@ -721,6 +977,11 @@
         "response_shape": {
           "id": "int",
           "customer_name": "string",
+          "customer_email": "string|null",
+          "customer_phone": "string|null",
+          "customer_document": "string|null",
+          "customer_address": "string|null",
+          "customer_id": "int|null",
           "total": "float",
           "status": "COMPLETED",
           "notes": "string|null",
@@ -735,7 +996,8 @@
               "shelf_code": "string|null",
               "quantity": "int",
               "unit_price": "float",
-              "subtotal": "float"
+              "subtotal": "float",
+              "tax_amount": "float (calculado automático de taxes del producto)"
             }
           ]
         },
@@ -760,16 +1022,21 @@
     },
 
     "orders": {
-      "_intro": "Los pedidos tienen una máquina de estados: CREATED → PREPARING → READY → DELIVERED. Solo forward. Al hacer deliver, se crea una venta automáticamente. shelf_id es opcional como en sales.",
+      "_intro": "Los pedidos tienen una máquina de estados: CREATED → PREPARING → READY → DELIVERED. Solo forward. Al hacer deliver, se crea una venta automáticamente. shelf_id es opcional como en sales. Datos de cliente opcionales con auto-detección (mismo email/documento reutiliza cliente existente).",
 
       "list": {
         "method": "GET",
         "path": "/orders/",
         "auth": "orders_read",
-        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), status (=), total (=), notes (ILIKE)" },
+        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), customer_email (ILIKE), status (=), total (=), notes (ILIKE)" },
         "response_shape": {
           "id": "int",
           "customer_name": "string",
+          "customer_email": "string|null",
+          "customer_phone": "string|null",
+          "customer_document": "string|null",
+          "customer_address": "string|null",
+          "customer_id": "int|null",
           "total": "float",
           "status": "string (CREATED|PREPARING|READY|DELIVERED)",
           "notes": "string|null",
@@ -784,6 +1051,10 @@
         "auth": "orders_create",
         "request_body": {
           "customer_name": "string (1-200, requerido)",
+          "customer_email": "string|null (opcional, si se envía se busca/reutiliza cliente existente)",
+          "customer_phone": "string|null (max 30)",
+          "customer_document": "string|null (max 30)",
+          "customer_address": "string|null (max 500)",
           "notes": "string|null (max 1000)",
           "items": [
             {
@@ -869,6 +1140,80 @@
       }
     },
 
+    "tenants": {
+      "_intro": "Gestión de tenants (empresas). Solo platform admin (is_super_admin=true). Al crear un tenant se generan automáticamente roles Admin/Operator/Viewer para ese tenant. Opcionalmente se puede crear el usuario admin del tenant en el mismo request.",
+
+      "list": {
+        "method": "GET",
+        "path": "/tenants/",
+        "auth": "tenants_manage",
+        "query": { "page": "int", "size": "int", "name": "string (ILIKE)", "slug": "string (ILIKE)" },
+        "response_shape": {
+          "id": "int",
+          "name": "string (nombre de la empresa)",
+          "slug": "string (identificador URL, ej: acme-corp)",
+          "is_active": "bool",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "Solo visible para platform admin.",
+          "Usar para poblar el selector de tenant en la UI del admin."
+        ]
+      },
+
+      "create": {
+        "method": "POST",
+        "path": "/tenants/",
+        "auth": "tenants_manage",
+        "request_body": {
+          "name": "string (1-200, requerido, ej: 'Acme Corp')",
+          "slug": "string (1-100, requerido, regex ^[a-z0-9-]+$, ej: 'acme-corp')",
+          "admin_email": "string|null (opcional, si se envía crea usuario admin del tenant)",
+          "admin_password": "string|null (opcional, min 6, requerido si admin_email está presente)"
+        },
+        "response_shape": "mismo que list.items[0] (201 Created)",
+        "errores": {
+          "409": "Si slug ya existe: 'El slug ya está en uso'",
+          "409": "Si admin_email ya existe: 'El email del admin ya está registrado'"
+        },
+        "frontend_notes": [
+          "slug debe ser URL-safe: solo minúsculas, números y guiones.",
+          "Si se envían admin_email + admin_password, se crea usuario admin con tenant_id y rol Admin asignado.",
+          "Los roles Admin/Operator/Viewer se crean automáticamente para el nuevo tenant."
+        ]
+      },
+
+      "get_one": {
+        "method": "GET",
+        "path": "/tenants/{id}",
+        "auth": "tenants_manage",
+        "response_shape": "mismo que list.items[0]"
+      },
+
+      "update": {
+        "method": "PUT",
+        "path": "/tenants/{id}",
+        "auth": "tenants_manage",
+        "request_body": {
+          "name": "string|null (1-200, opcional)",
+          "is_active": "bool|null (opcional)"
+        },
+        "response_shape": "mismo que list.items[0]"
+      },
+
+      "delete": {
+        "method": "DELETE",
+        "path": "/tenants/{id}",
+        "auth": "tenants_manage",
+        "response": "204 No Content",
+        "frontend_notes": [
+          "Soft delete: marca is_active=false, no borra datos.",
+          "Los datos del tenant (productos, usuarios, etc.) se conservan."
+        ]
+      }
+    },
+
     "flujo_frontend_tipico": {
     "buscar_producto_por_nombre_parcial": [
       "1. Input de búsqueda en frontend: usuario escribe 'mart'",
@@ -902,6 +1247,7 @@
 
   "permisos_frontend": {
     "_como_usar": "Decodificar JWT en frontend. El endpoint GET /auth/me devuelve la lista de permisos del usuario.",
+    "_multitenant": "Si el usuario es platform admin (is_super_admin=true) sin tenant, tiene acceso a todo. Si es platform admin con X-Tenant header, sus permisos se evalúan dentro de ese tenant. Usuarios normales tienen permisos dentro de su tenant.",
     "mapeo_rutas": {
       "products_create": "mostrar botón 'Nuevo Producto'",
       "products_read": "mostrar lista de productos, ver detalle",
@@ -922,12 +1268,17 @@
       "orders_manage": "mostrar botones de transición (Preparar, Listo, Entregar)",
       "users_manage": "mostrar sección Admin → Usuarios",
       "roles_manage": "mostrar sección Admin → Roles",
-      "events_read": "mostrar sección Auditoría"
+      "events_read": "mostrar sección Auditoría",
+      "tenants_manage": "mostrar sección Admin → Tenants (solo platform admin)",
+      "taxes_read": "mostrar lista de impuestos",
+      "taxes_manage": "mostrar botones 'Nuevo Impuesto', 'Editar', 'Eliminar'",
+      "customers_read": "mostrar lista de clientes",
+      "customers_manage": "mostrar botones 'Nuevo Cliente', 'Editar'"
     },
     "roles_default": {
-      "Admin": "todos los permisos",
-      "Operator": "products_create, products_read, products_update, shelves_read, shelves_update, categories_read, sales_create, sales_read, orders_create, orders_read, orders_manage",
-      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read"
+      "Admin": "todos los permisos excepto tenants_manage (solo platform admin)",
+      "Operator": "products_create, products_read, products_update, shelves_read, shelves_update, categories_read, sales_create, sales_read, orders_create, orders_read, orders_manage, taxes_read, customers_read",
+      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read"
     }
   }
 }

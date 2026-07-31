@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
-from app.modules.orders.model import Order, OrderItem, OrderStatus
+from app.core.tenant import current_tenant_id
+from app.modules.orders.model import Order, OrderStatus
 from app.modules.orders.repository import OrderItemRepository, OrderRepository
 from app.modules.orders.schema import (
-    OrderCreate, OrderDetailResponse, OrderItemResponse, OrderResponse,
+    OrderCreate, OrderDetailResponse, OrderItemResponse,
 )
 from app.modules.shelves.repository import ShelfItemRepository
 
@@ -53,6 +54,8 @@ class OrderService:
     async def create(self, data: OrderCreate, user_id: int) -> OrderDetailResponse:
         if not data.items:
             raise ValidationException("El pedido debe tener al menos un producto")
+        if current_tenant_id.get() is None:
+            raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
         product_ids = [i.product_id for i in data.items]
         products = await self.shelf_item_repo.get_products_by_ids(product_ids)
@@ -157,6 +160,10 @@ class OrderService:
 
         sale_data = SaleCreate(
             customer_name=order.customer_name,
+            customer_email=order.customer_email,
+            customer_phone=order.customer_phone,
+            customer_document=order.customer_document,
+            customer_address=order.customer_address,
             notes=order.notes,
             items=[
                 SaleItemCreate(
@@ -169,6 +176,7 @@ class OrderService:
             ],
         )
 
+        current_tenant_id.set(order.tenant_id)
         await self.sale_service.create(sale_data, user_id)
 
         previous_status = order.status

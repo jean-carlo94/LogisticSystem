@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 
-from app.core.exceptions import NotFoundException
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import require_permission
 from app.modules.shelves.deps import get_shelf_service

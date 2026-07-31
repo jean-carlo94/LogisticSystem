@@ -69,10 +69,20 @@ class UserRepository(BaseRepository):
     async def has_sales(self, user_id: int) -> bool:
         from app.modules.sales.model import Sale
 
-        s = await self.db.scalar(
-            select(Sale.id).where(Sale.created_by == user_id).limit(1)
-        )
+        stmt = select(Sale.id).where(Sale.created_by == user_id).limit(1)
+        if self._tenant_id is not None:
+            stmt = stmt.where(Sale.tenant_id == self._tenant_id)
+        s = await self.db.scalar(stmt)
         return s is not None
+
+    async def has_orders(self, user_id: int) -> bool:
+        from app.modules.orders.model import Order
+
+        stmt = select(Order.id).where(Order.created_by == user_id).limit(1)
+        if self._tenant_id is not None:
+            stmt = stmt.where(Order.tenant_id == self._tenant_id)
+        o = await self.db.scalar(stmt)
+        return o is not None
 
     async def create_reset_token(
         self, user_id: int, token_hash: str, expires_at: datetime

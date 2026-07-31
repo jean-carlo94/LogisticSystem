@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
 from app.core.storage import get_image_url
 
@@ -20,7 +20,19 @@ class UserLogin(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
 
 
-class UserResponse(BaseModel):
+class HasImageUrl(BaseModel):
+    image_path: str | None = None
+    tenant_id: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return get_image_url(self.image_path)
+
+
+class UserResponse(HasImageUrl):
     id: int
     email: str
     first_name: str | None = None
@@ -29,16 +41,8 @@ class UserResponse(BaseModel):
     city: str | None = None
     country: str | None = None
     is_active: bool
-    image_path: str | None = None
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-    @computed_field
-    @property
-    def image_url(self) -> str | None:
-        return get_image_url(self.image_path)
 
 
 class TokenResponse(BaseModel):
@@ -57,7 +61,7 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class UserAdminResponse(BaseModel):
+class UserAdminResponse(HasImageUrl):
     id: int
     email: str
     first_name: str | None = None
@@ -67,24 +71,17 @@ class UserAdminResponse(BaseModel):
     country: str | None = None
     is_active: bool
     is_super_admin: bool
-    image_path: str | None = None
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-    @computed_field
-    @property
-    def image_url(self) -> str | None:
-        return get_image_url(self.image_path)
 
 
 class RoleInfo(BaseModel):
     id: int
+    tenant_id: int
     name: str
 
 
-class UserProfileResponse(BaseModel):
+class UserProfileResponse(HasImageUrl):
     id: int
     email: str
     first_name: str | None = None
@@ -94,18 +91,10 @@ class UserProfileResponse(BaseModel):
     country: str | None = None
     is_active: bool
     is_super_admin: bool
-    image_path: str | None = None
     created_at: datetime
     updated_at: datetime
     roles: list[RoleInfo] = []
     permissions: list[str] = []
-
-    model_config = ConfigDict(from_attributes=True)
-
-    @computed_field
-    @property
-    def image_url(self) -> str | None:
-        return get_image_url(self.image_path)
 
 
 class UserProfileUpdate(BaseModel):

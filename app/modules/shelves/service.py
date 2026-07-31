@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
+from app.core.tenant import current_tenant_id
 from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.shelves.repository import ShelfItemRepository, ShelfRepository
 from app.modules.shelves.schema import (
@@ -83,6 +84,8 @@ class ShelfService:
         )
 
     async def create(self, data: ShelfCreate, user_id: int) -> Shelf:
+        if current_tenant_id.get() is None:
+            raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
         existing = await self.shelf_repo.get_by_code(data.code)
         if existing:
             raise ConflictException("El código de estantería ya existe")
@@ -119,6 +122,11 @@ class ShelfService:
         if await self.item_repo.has_sale_items(shelf_id):
             raise ConflictException(
                 "No se puede eliminar una estantería con historial de ventas"
+            )
+
+        if await self.item_repo.has_order_items(shelf_id):
+            raise ConflictException(
+                "No se puede eliminar una estantería con pedidos asociados"
             )
 
         await self.audit.log_delete("Shelf", shelf.id, user_id, shelf)

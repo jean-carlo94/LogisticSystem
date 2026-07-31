@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 import bcrypt
@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.permissions import PermissionCode
+from app.core.tenant import current_tenant_id
 
 if TYPE_CHECKING:
     from app.modules.users.model import User
@@ -28,9 +29,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
-def create_access_token(user_id: int, token_version: int = 0) -> str:
+def create_access_token(user_id: int, token_version: int = 0, tenant_id: int | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
     payload: dict[str, Any] = {"sub": str(user_id), "exp": expire, "ver": token_version}
+    if tenant_id is not None:
+        payload["tid"] = tenant_id
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
 
@@ -55,6 +58,10 @@ async def get_current_user(
         raise UnauthorizedException("Credenciales invalidas o expiradas")
     if user.token_version != token_ver:
         raise UnauthorizedException("Sesion invalida. La contrasena fue cambiada. Inicia sesion de nuevo.")
+
+    if not user.is_super_admin and user.tenant_id is not None:
+        current_tenant_id.set(user.tenant_id)
+
     return user
 
 
@@ -62,18 +69,21 @@ def require_permission(permission_code: PermissionCode):
     async def dependency(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
+        _tenant: int | None = Depends(_tenant_context),
     ) -> User:
         if current_user.is_super_admin:
             return current_user
 
         from sqlalchemy import select
-        from app.modules.roles.model import Permission, RolePermission, UserRole
+        from app.modules.roles.model import Permission, Role, RolePermission, UserRole
 
         result = await db.scalar(
             select(Permission).join(
                 RolePermission, RolePermission.permission_id == Permission.id
             ).join(
-                UserRole, UserRole.role_id == RolePermission.role_id
+                Role, Role.id == RolePermission.role_id
+            ).join(
+                UserRole, UserRole.role_id == Role.id
             ).where(
                 UserRole.user_id == current_user.id,
                 Permission.code == permission_code,
@@ -84,3 +94,11 @@ def require_permission(permission_code: PermissionCode):
         return current_user
 
     return dependency
+
+
+async def _tenant_context(
+    current_user: User = Depends(get_current_user),
+    x_tenant: str | None = Header(default=None, alias="X-Tenant"),
+) -> int | None:
+    from app.core.tenant import resolve_tenant
+    return await resolve_tenant(current_user, x_tenant)

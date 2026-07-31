@@ -33,21 +33,21 @@ class UserService:
         self.audit = audit
         self.email = email
 
-    async def register(self, user_in: UserCreate) -> User:
-        if await self.repo.find_by_email(user_in.email):
+    async def create_user(self, data: UserCreate, actor_id: int) -> User:
+        if await self.repo.find_by_email(data.email):
             raise ConflictException("El email ya esta registrado")
 
         user = await self.repo.create(
-            email=user_in.email,
-            hashed_password=hash_password(user_in.password),
-            first_name=user_in.first_name,
-            last_name=user_in.last_name,
-            phone=user_in.phone,
-            city=user_in.city,
-            country=user_in.country,
+            email=data.email,
+            hashed_password=hash_password(data.password),
+            first_name=data.first_name,
+            last_name=data.last_name,
+            phone=data.phone,
+            city=data.city,
+            country=data.country,
             is_active=False,
         )
-        await self.audit.log_create("User", user.id, user.id, user)
+        await self.audit.log_create("User", user.id, actor_id, user)
         await self._send_activation_email(user)
         return user
 
@@ -116,7 +116,7 @@ class UserService:
             raise UnauthorizedException("Email o contrasena incorrectos")
         if not user.is_active:
             raise ForbiddenException("Cuenta no activada. Revisa tu correo para activarla.")
-        return TokenResponse(access_token=create_access_token(user.id, user.token_version))
+        return TokenResponse(access_token=create_access_token(user.id, user.token_version, user.tenant_id))
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
@@ -135,7 +135,7 @@ class UserService:
         if not await self.repo.get_by_id(user_id):
             raise NotFoundException("Usuario no encontrado")
         roles = await self.repo.get_user_roles(user_id)
-        return [RoleInfo(id=r.id, name=r.name) for r in roles]
+        return [RoleInfo(id=r.id, tenant_id=r.tenant_id, name=r.name) for r in roles]
 
     async def assign_role(self, user_id: int, role_id: int) -> None:
         if not await self.repo.get_by_id(user_id):
@@ -158,10 +158,11 @@ class UserService:
             country=user.country,
             is_active=user.is_active,
             is_super_admin=user.is_super_admin,
+            tenant_id=user.tenant_id,
             image_path=user.image_path,
             created_at=user.created_at,
             updated_at=user.updated_at,
-            roles=[RoleInfo(id=r.id, name=r.name) for r in roles],
+            roles=[RoleInfo(id=r.id, tenant_id=r.tenant_id, name=r.name) for r in roles],
             permissions=permissions,
         )
 
@@ -200,6 +201,11 @@ class UserService:
         if await self.repo.has_sales(user_id):
             raise ConflictException(
                 "No se puede eliminar un usuario con historial de ventas"
+            )
+
+        if await self.repo.has_orders(user_id):
+            raise ConflictException(
+                "No se puede eliminar un usuario con historial de pedidos"
             )
 
         if user.image_path:

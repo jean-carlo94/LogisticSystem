@@ -8,10 +8,16 @@ from app.core.database import Base
 
 class Shelf(Base):
     __tablename__ = "shelves"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_shelf_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     _name: Mapped[str] = mapped_column("name", String(100), nullable=False)
-    _code: Mapped[str] = mapped_column("code", String(50), unique=True, nullable=False)
+    _code: Mapped[str] = mapped_column("code", String(50), nullable=False)
     aisle: Mapped[str] = mapped_column(String(20), default="", nullable=False)
     row: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

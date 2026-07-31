@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repository import BaseRepository
+from app.core.tenant import current_tenant_id
 from app.modules.roles.model import Permission, Role, RolePermission, UserRole
 
 
@@ -9,7 +10,11 @@ class RoleRepository(BaseRepository):
     model = Role
 
     async def find_by_name(self, name: str):
-        return await self.db.scalar(select(Role).where(Role.name == name))
+        tid = current_tenant_id.get()
+        stmt = select(Role).where(Role._name == name)
+        if tid is not None:
+            stmt = stmt.where(Role.tenant_id == tid)
+        return await self.db.scalar(stmt)
 
     async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> None:
         existing = await self.db.scalars(
@@ -50,3 +55,10 @@ class UserRoleRepository:
     async def user_exists(self, user_id: int) -> bool:
         from app.modules.users.model import User
         return await self.db.get(User, user_id) is not None
+
+    async def get_user_tenant_id(self, user_id: int) -> int | None:
+        from app.modules.users.model import User
+        user = await self.db.get(User, user_id)
+        if user is None:
+            return None
+        return user.tenant_id

@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
 from app.core.database import _get_sessionmaker
 from app.core.security import hash_password
-from app.modules.roles.model import Permission, Role, RolePermission, UserRole
+from app.modules.roles.model import Permission, Role, RolePermission
 from app.modules.users.model import User
 
 SEED_PATH = Path(__file__).parent.parent / "seed.json"
@@ -26,42 +26,6 @@ async def seed_defaults():
 
         await db.flush()
 
-        all_perms = await db.scalars(select(Permission))
-        perm_map = {p.code: p.id for p in all_perms}
-
-        all_perm_codes = set(perm_map.keys())
-
-        for name, perms in data["roles"].items():
-            unknown = [c for c in perms if c not in all_perm_codes]
-            if unknown:
-                raise ValueError(
-                    f"Rol '{name}' referencia permisos no definidos: {unknown}"
-                )
-
-            existing_role = await db.scalar(select(Role).where(Role.name == name))
-            if existing_role:
-                existing_role_perms = await db.scalars(
-                    select(RolePermission.permission_id).where(
-                        RolePermission.role_id == existing_role.id
-                    )
-                )
-                existing_perm_ids = set(existing_role_perms.all())
-                for code in perms:
-                    if perm_map[code] not in existing_perm_ids:
-                        db.add(RolePermission(
-                            role_id=existing_role.id,
-                            permission_id=perm_map[code],
-                        ))
-            else:
-                role = Role(name=name, description=f"Rol {name}")
-                db.add(role)
-                await db.flush()
-                for code in perms:
-                    db.add(RolePermission(
-                        role_id=role.id,
-                        permission_id=perm_map[code],
-                    ))
-
         admin_email = settings.ADMIN_EMAIL or "admin@alunatechnologies.com"
         admin_password = settings.ADMIN_PASSWORD or "admin123"
 
@@ -70,7 +34,6 @@ async def seed_defaults():
                 select(User).where(User.email == admin_email)
             )
             if not admin:
-                admin_role = await db.scalar(select(Role).where(Role.name == "Admin"))
                 admin = User(
                     email=admin_email,
                     hashed_password=hash_password(admin_password),
@@ -79,11 +42,48 @@ async def seed_defaults():
                     is_super_admin=True,
                 )
                 db.add(admin)
-                await db.flush()
-                if admin_role:
-                    db.add(UserRole(user_id=admin.id, role_id=admin_role.id))
 
         try:
             await db.commit()
         except IntegrityError:
             await db.rollback()
+
+
+async def seed_tenant_roles(tenant_id: int, db=None):
+    from app.core.database import _get_sessionmaker
+
+    data = json.loads(SEED_PATH.read_text())
+
+    all_perm_codes = set(data["permissions"].keys())
+
+    async def _seed(session):
+        all_perms = await session.scalars(select(Permission))
+        perm_map = {p.code: p.id for p in all_perms}
+
+        for name, perms in data["roles"].items():
+            unknown = [c for c in perms if c not in all_perm_codes]
+            if unknown:
+                raise ValueError(
+                    f"Rol '{name}' referencia permisos no definidos: {unknown}"
+                )
+
+            existing = await session.scalar(
+                select(Role).where(Role._name == name, Role.tenant_id == tenant_id)
+            )
+            if not existing:
+                role = Role(name=name, description=f"Rol {name}", tenant_id=tenant_id)
+                session.add(role)
+                await session.flush()
+                for code in perms:
+                    session.add(RolePermission(
+                        role_id=role.id,
+                        permission_id=perm_map[code],
+                    ))
+
+        await session.commit()
+
+    if db is not None:
+        await _seed(db)
+    else:
+        async with _get_sessionmaker()() as session:
+            await _seed(session)

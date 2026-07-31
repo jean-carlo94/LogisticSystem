@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from app.core.audit import AuditLogger
-from app.core.exceptions import ConflictException, NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
-from app.modules.roles.model import Permission, Role, UserRole
+from app.modules.roles.model import Role, UserRole
 from app.modules.roles.repository import PermissionRepository, RoleRepository, UserRoleRepository
 from app.modules.roles.schema import RoleCreate, RoleUpdate
 
@@ -21,14 +21,14 @@ class RoleService:
         items, total = await self.role_repo.get_all(skip=skip, limit=size, filters=filters)
         return PaginatedResponse.of(list(items), total, page, size)
 
-    async def create(self, data: RoleCreate) -> Role:
+    async def create(self, data: RoleCreate, user_id: int) -> Role:
         if await self.role_repo.find_by_name(data.name):
             raise ConflictException("El rol ya existe")
         role = await self.role_repo.create(**data.model_dump())
-        await self.audit.log_create("Role", role.id, role.id, role)
+        await self.audit.log_create("Role", role.id, user_id, role)
         return role
 
-    async def update(self, role_id: int, data: RoleUpdate) -> Role:
+    async def update(self, role_id: int, data: RoleUpdate, user_id: int) -> Role:
         role = await self.role_repo.get_by_id(role_id)
         if not role:
             raise NotFoundException("Rol no encontrado")
@@ -38,21 +38,22 @@ class RoleService:
             if existing and existing.id != role_id:
                 raise ConflictException("El nombre ya esta en uso")
         role = await self.role_repo.update(role, **update_data)
-        await self.audit.log_update("Role", role.id, role.id, update_data)
+        await self.audit.log_update("Role", role.id, user_id, update_data)
         return role
 
-    async def delete(self, role_id: int) -> None:
+    async def delete(self, role_id: int, user_id: int) -> None:
         role = await self.role_repo.get_by_id(role_id)
         if not role:
             raise NotFoundException("Rol no encontrado")
-        await self.audit.log_delete("Role", role.id, role.id, role)
+        await self.audit.log_delete("Role", role.id, user_id, role)
         await self.role_repo.delete(role)
 
-    async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> Role:
+    async def assign_permissions(self, role_id: int, permission_ids: list[int], user_id: int) -> Role:
         role = await self.role_repo.get_by_id(role_id)
         if not role:
             raise NotFoundException("Rol no encontrado")
         await self.role_repo.assign_permissions(role_id, permission_ids)
+        await self.audit.log_update("Role", role.id, user_id, {"permissions_assigned": permission_ids})
         return role
 
     async def get_permissions(self, role_id: int):
@@ -63,11 +64,17 @@ class RoleService:
     async def list_permissions(self):
         return await self.perm_repo.get_all()
 
-    async def assign_role_to_user(self, user_id: int, role_id: int) -> None:
-        if not await self.role_repo.get_by_id(role_id):
+    async def assign_role_to_user(self, user_id: int, role_id: int, actor_id: int) -> None:
+        role = await self.role_repo.get_by_id(role_id)
+        if not role:
             raise NotFoundException("Rol no encontrado")
         if not await self.user_role_repo.user_exists(user_id):
             raise NotFoundException("Usuario no encontrado")
+
+        user_tenant_id = await self.user_role_repo.get_user_tenant_id(user_id)
+        if user_tenant_id is not None and user_tenant_id != role.tenant_id:
+            raise ValidationException("Usuario y rol deben pertenecer al mismo tenant")
+
         from sqlalchemy import select
         existing = await self.user_role_repo.db.scalar(
             select(UserRole).where(
@@ -79,3 +86,4 @@ class RoleService:
             ur = UserRole(user_id=user_id, role_id=role_id)
             self.user_role_repo.db.add(ur)
             await self.user_role_repo.db.flush()
+            await self.audit.log_create("UserRole", ur.id, actor_id, ur)

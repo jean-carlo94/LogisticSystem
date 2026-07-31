@@ -13,9 +13,9 @@ def _init_resend():
     if _RESEND_READY:
         return
     if settings.RESEND_API_KEY:
-        import resend
+        import resend as _resend
 
-        resend.api_key = settings.RESEND_API_KEY
+        _resend.api_key = settings.RESEND_API_KEY
         _RESEND_READY = True
 
 
@@ -25,6 +25,8 @@ class EmailSender:
         if not _RESEND_READY:
             logger.debug("RESEND_API_KEY not configured, skipping email to %s", to)
             return None
+
+        import resend
 
         params: resend.Emails.SendParams = {
             "from": settings.RESEND_FROM_EMAIL,

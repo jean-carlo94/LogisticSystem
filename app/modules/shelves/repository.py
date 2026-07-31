@@ -8,12 +8,13 @@ class ShelfRepository(BaseRepository):
     model = Shelf
 
     async def get_by_code(self, code: str) -> Shelf | None:
-        return await self.db.scalar(select(Shelf).where(Shelf.code == code))
+        return await self.db.scalar(select(Shelf).where(Shelf._code == code))
 
     async def get_shelves_by_ids(self, shelf_ids: list[int]) -> list[Shelf]:
-        result = await self.db.scalars(
-            select(Shelf).where(Shelf.id.in_(shelf_ids))
-        )
+        stmt = select(Shelf).where(Shelf.id.in_(shelf_ids))
+        if self._tenant_id is not None:
+            stmt = stmt.where(Shelf.tenant_id == self._tenant_id)
+        result = await self.db.scalars(stmt)
         return list(result.all())
 
 
@@ -48,13 +49,17 @@ class ShelfItemRepository(BaseRepository):
 
     async def get_product_by_id(self, product_id: int):
         from app.modules.products.model import Product
-        return await self.db.scalar(select(Product).where(Product.id == product_id))
+        stmt = select(Product).where(Product.id == product_id)
+        if self._tenant_id is not None:
+            stmt = stmt.where(Product.tenant_id == self._tenant_id)
+        return await self.db.scalar(stmt)
 
     async def get_products_by_ids(self, product_ids: list[int]):
         from app.modules.products.model import Product
-        result = await self.db.scalars(
-            select(Product).where(Product.id.in_(product_ids))
-        )
+        stmt = select(Product).where(Product.id.in_(product_ids))
+        if self._tenant_id is not None:
+            stmt = stmt.where(Product.tenant_id == self._tenant_id)
+        result = await self.db.scalars(stmt)
         return result.all()
 
     async def has_sale_items(self, shelf_id: int) -> bool:
@@ -62,5 +67,13 @@ class ShelfItemRepository(BaseRepository):
 
         item = await self.db.scalar(
             select(SaleItem.id).where(SaleItem.shelf_id == shelf_id).limit(1)
+        )
+        return item is not None
+
+    async def has_order_items(self, shelf_id: int) -> bool:
+        from app.modules.orders.model import OrderItem
+
+        item = await self.db.scalar(
+            select(OrderItem.id).where(OrderItem.shelf_id == shelf_id).limit(1)
         )
         return item is not None

@@ -4,6 +4,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import class_mapper
 
+from app.core.tenant import current_tenant_id
 from app.modules.events.model import ActionType
 from app.modules.events.model import Event
 
@@ -43,13 +44,15 @@ class AuditLogger:
                 if prop.key not in ("hashed_password",)
             }
         description = data if isinstance(data, str) else json.dumps(data, default=str)
-        if len(description) > 65536:
-            description = description[:65536] + "...[truncated]"
-        await Event.create(
-            self._db,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            action=action,
-            user_id=user_id,
-            description=description,
-        )
+        description = description[:65536]
+        kwargs: dict[str, Any] = {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "action": action,
+            "user_id": user_id,
+            "description": description,
+        }
+        tid = current_tenant_id.get()
+        if tid is not None:
+            kwargs["tenant_id"] = tid
+        await Event.create(self._db, **kwargs)

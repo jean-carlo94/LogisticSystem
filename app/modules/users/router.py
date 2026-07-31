@@ -22,14 +22,6 @@ users_router = APIRouter(prefix="/users", tags=["users"])
 
 # ── Auth (público + autenticado) ──
 
-@auth_router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(
-    user_in: UserCreate,
-    service: UserService = Depends(get_user_service),
-) -> UserResponse:
-    return await service.register(user_in)
-
-
 @auth_router.post("/login", response_model=TokenResponse)
 async def login(
     credentials: UserLogin,
@@ -128,6 +120,15 @@ async def resend_activation(
 
 
 # ── Admin CRUD usuarios ──
+
+@users_router.post("/", response_model=UserAdminResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    data: UserCreate,
+    service: UserService = Depends(get_user_service),
+    actor: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+):
+    return await service.create_user(data, actor.id)
+
 
 @users_router.get("/", response_model=PaginatedResponse[UserAdminResponse])
 async def list_users(

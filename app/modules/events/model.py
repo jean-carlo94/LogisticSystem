@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Enum, Index, Integer, String, Text, func
+from sqlalchemy import Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 import enum
@@ -23,6 +23,9 @@ class Event(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="SET NULL"), default=None, index=True
+    )
     entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[ActionType] = mapped_column(

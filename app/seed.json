@@ -19,10 +19,15 @@
     "sales_read": "Ver ventas",
     "orders_create": "Crear pedidos",
     "orders_read": "Ver pedidos",
-    "orders_manage": "Gestionar pedidos"
+    "orders_manage": "Gestionar pedidos",
+    "tenants_manage": "Gestionar tenants",
+    "taxes_read": "Ver impuestos",
+    "taxes_manage": "Gestionar impuestos",
+    "customers_read": "Ver clientes",
+    "customers_manage": "Gestionar clientes"
   },
   "roles": {
-    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage", "shelves_create", "shelves_read", "shelves_update", "shelves_delete", "categories_create", "categories_read", "categories_update", "categories_delete", "sales_create", "sales_read", "orders_create", "orders_read", "orders_manage"],
+    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage", "shelves_create", "shelves_read", "shelves_update", "shelves_delete", "categories_create", "categories_read", "categories_update", "categories_delete", "sales_create", "sales_read", "orders_create", "orders_read", "orders_manage", "taxes_read", "taxes_manage", "customers_read", "customers_manage"],
     "Operator": ["products_create", "products_read", "products_update", "shelves_read", "shelves_update", "categories_read", "sales_create", "sales_read"],
     "Viewer": ["products_read", "shelves_read", "categories_read", "sales_read"]
   }

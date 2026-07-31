@@ -3,12 +3,14 @@ from __future__ import annotations
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
+from app.core.tenant import current_tenant_id
+from app.modules.customers.service import CustomerService
 from app.modules.products.repository import ProductRepository
 from app.modules.sales.model import SaleStatus
 from app.modules.sales.model import Sale
 from app.modules.sales.repository import SaleItemRepository, SaleRepository
 from app.modules.sales.schema import (
-    SaleCreate, SaleItemResponse, SaleResponse, SaleDetailResponse,
+    SaleCreate, SaleItemResponse, SaleDetailResponse,
 )
 from app.modules.shelves.repository import ShelfItemRepository, ShelfRepository
 
@@ -21,6 +23,7 @@ class SaleService:
         shelf_item_repo: ShelfItemRepository,
         shelf_repo: ShelfRepository,
         product_repo: ProductRepository,
+        customer_service: CustomerService,
         audit: AuditLogger,
     ):
         self.sale_repo = sale_repo
@@ -28,6 +31,7 @@ class SaleService:
         self.shelf_item_repo = shelf_item_repo
         self.shelf_repo = shelf_repo
         self.product_repo = product_repo
+        self.customer_service = customer_service
         self.audit = audit
 
     async def get_all(
@@ -45,16 +49,23 @@ class SaleService:
     async def create(self, data: SaleCreate, user_id: int) -> SaleDetailResponse:
         if not data.items:
             raise ValidationException("La venta debe tener al menos un producto")
+        if current_tenant_id.get() is None:
+            raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
+
+        customer = await self.customer_service.find_or_create(
+            data.model_dump(), user_id
+        )
 
         product_ids = [i.product_id for i in data.items]
-        products = await self.shelf_item_repo.get_products_by_ids(product_ids)
-        products_map = {p.id: p for p in products}
+        products_map = await self.product_repo.lock_products_for_update(product_ids)
 
         shelf_items = await self.shelf_item_repo.get_items_by_product_ids(product_ids)
         shelf_items_map = {(si.shelf_id, si.product_id): si for si in shelf_items}
 
         total = 0.0
         items_deducted = []
+
+        taxes_map = await self.product_repo.get_products_taxes_batch(product_ids)
 
         for item_in in data.items:
             product = products_map.get(item_in.product_id)
@@ -85,7 +96,13 @@ class SaleService:
                     )
 
             subtotal = round(item_in.quantity * item_in.unit_price, 2)
-            total += subtotal
+            taxes = taxes_map.get(item_in.product_id, [])
+            tax_amount = 0.0
+            for tax in taxes:
+                tax_amount += round(subtotal * tax.rate / 100, 2)
+            tax_amount = round(tax_amount, 2)
+
+            total += subtotal + tax_amount
 
             if shelf_item:
                 new_shelf_qty = shelf_item.quantity - item_in.quantity
@@ -115,10 +132,16 @@ class SaleService:
                 "quantity": item_in.quantity,
                 "unit_price": item_in.unit_price,
                 "subtotal": subtotal,
+                "tax_amount": tax_amount,
             })
 
         sale = await self.sale_repo.create(
             customer_name=data.customer_name,
+            customer_email=data.customer_email,
+            customer_phone=data.customer_phone,
+            customer_document=data.customer_document,
+            customer_address=data.customer_address,
+            customer_id=customer.id if customer else None,
             total=round(total, 2),
             status=SaleStatus.COMPLETED,
             notes=data.notes,
@@ -133,6 +156,7 @@ class SaleService:
                 quantity=it["quantity"],
                 unit_price=it["unit_price"],
                 subtotal=it["subtotal"],
+                tax_amount=it["tax_amount"],
             )
             await self.audit.log_create("SaleItem", item.id, user_id, item)
 
@@ -174,12 +198,18 @@ class SaleService:
                     quantity=item.quantity,
                     unit_price=item.unit_price,
                     subtotal=item.subtotal,
+                    tax_amount=item.tax_amount,
                 )
             )
 
         return SaleDetailResponse(
             id=sale.id,
             customer_name=sale.customer_name,
+            customer_email=sale.customer_email,
+            customer_phone=sale.customer_phone,
+            customer_document=sale.customer_document,
+            customer_address=sale.customer_address,
+            customer_id=sale.customer_id,
             total=sale.total,
             status=sale.status,
             notes=sale.notes,

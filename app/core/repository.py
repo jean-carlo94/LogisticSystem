@@ -3,6 +3,7 @@ from abc import ABC
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
+from app.core.tenant import current_tenant_id
 
 
 class BaseRepository(ABC):
@@ -11,13 +12,22 @@ class BaseRepository(ABC):
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @property
+    def _tenant_id(self):
+        return current_tenant_id.get()
+
     async def get_all(self, skip: int = 0, limit: int = 100, filters: dict | None = None):
-        return await self.model.get_all(self.db, skip=skip, limit=limit, filters=filters)
+        return await self.model.get_all(
+            self.db, skip=skip, limit=limit, filters=filters, tenant_id=self._tenant_id
+        )
 
     async def get_by_id(self, entity_id: int):
-        return await self.model.get_id(self.db, entity_id)
+        return await self.model.get_id(self.db, entity_id, tenant_id=self._tenant_id)
 
     async def create(self, **kwargs):
+        tid = self._tenant_id
+        if tid is not None and hasattr(self.model, "tenant_id") and "tenant_id" not in kwargs:
+            kwargs["tenant_id"] = tid
         return await self.model.create(self.db, **kwargs)
 
     async def update(self, entity, **kwargs):

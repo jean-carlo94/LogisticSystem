@@ -46,9 +46,9 @@ async def list_roles(
 async def create_role(
     data: RoleCreate,
     service: RoleService = Depends(get_role_service),
-    _perm: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
+    user: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
-    return await service.create(data)
+    return await service.create(data, user.id)
 
 
 @router.put("/{role_id}", response_model=RoleResponse)
@@ -56,18 +56,18 @@ async def update_role(
     role_id: int,
     data: RoleUpdate,
     service: RoleService = Depends(get_role_service),
-    _perm: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
+    user: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
-    return await service.update(role_id, data)
+    return await service.update(role_id, data, user.id)
 
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role_id: int,
     service: RoleService = Depends(get_role_service),
-    _perm: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
+    user: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
-    await service.delete(role_id)
+    await service.delete(role_id, user.id)
 
 
 @router.post("/{role_id}/permissions", response_model=RoleResponse)
@@ -75,9 +75,9 @@ async def assign_permissions(
     role_id: int,
     data: AssignPermissionsRequest,
     service: RoleService = Depends(get_role_service),
-    _perm: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
+    user: User = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
 ):
-    return await service.assign_permissions(role_id, data.permission_ids)
+    return await service.assign_permissions(role_id, data.permission_ids, user.id)
 
 
 @router.get("/{role_id}/permissions", response_model=list[PermissionResponse])
@@ -93,6 +93,6 @@ async def get_role_permissions(
 async def assign_role_to_user(
     data: AssignRoleRequest,
     service: RoleService = Depends(get_role_service),
-    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    user: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
-    await service.assign_role_to_user(data.user_id, data.role_id)
+    await service.assign_role_to_user(data.user_id, data.role_id, user.id)

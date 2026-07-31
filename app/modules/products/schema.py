@@ -23,6 +23,7 @@ class ProductBase(BaseModel):
 
 class ProductCreate(ProductBase):
     category_ids: list[int] = []
+    tax_ids: list[int] = []
 
 
 class ProductUpdate(BaseModel):
@@ -37,11 +38,20 @@ class ProductUpdate(BaseModel):
     height_cm: float | None = Field(default=None, ge=0)
     depth_cm: float | None = Field(default=None, ge=0)
     category_ids: list[int] | None = None
+    tax_ids: list[int] | None = None
 
 
 class CategoryInfo(BaseModel):
     id: int
     name: str
+
+    model_config = {"from_attributes": True}
+
+
+class TaxInfo(BaseModel):
+    id: int
+    name: str
+    rate: float
 
     model_config = {"from_attributes": True}
 
@@ -52,6 +62,7 @@ class ProductResponse(ProductBase):
     create_at: datetime
     update_at: datetime
     categories: list[CategoryInfo] = []
+    taxes: list[TaxInfo] = []
 
     model_config = ConfigDict(from_attributes=True)
 

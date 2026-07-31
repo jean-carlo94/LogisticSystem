@@ -42,6 +42,15 @@ class Base(DeclarativeBase):
             return False
 
     @classmethod
+    def _is_date_column(cls, col) -> bool:
+        try:
+            col_type = col.property.columns[0].type
+            from sqlalchemy import Date, DateTime
+            return isinstance(col_type, (Date, DateTime))
+        except Exception:
+            return False
+
+    @classmethod
     def _resolve_filter_column(cls, field: str):
         col = getattr(cls, field, None)
         if col is None:
@@ -78,6 +87,14 @@ class Base(DeclarativeBase):
             except ValueError:
                 return None
 
+        from sqlalchemy import Date, DateTime
+        if isinstance(col_type, (Date, DateTime)):
+            from datetime import datetime
+            try:
+                return datetime.strptime(value, "%Y-%m-%d").date()
+            except ValueError:
+                return None
+
         return value
 
     @classmethod
@@ -88,8 +105,12 @@ class Base(DeclarativeBase):
         return instance
 
     @classmethod
-    async def get_id(cls, db: AsyncSession, entity_id: int):
-        return await db.get(cls, entity_id)
+    async def get_id(cls, db: AsyncSession, entity_id: int, tenant_id: int | None = None):
+        entity = await db.get(cls, entity_id)
+        if entity is not None and tenant_id is not None and hasattr(entity, "tenant_id"):
+            if entity.tenant_id != tenant_id:
+                return None
+        return entity
 
     @classmethod
     async def get_all(
@@ -99,26 +120,34 @@ class Base(DeclarativeBase):
         limit: int = 100,
         order_by=None,
         filters: dict | None = None,
+        tenant_id: int | None = None,
     ) -> tuple[Sequence[Any], int]:
-        from sqlalchemy import func, select
+        from sqlalchemy import false as sa_false, func, select
 
         stmt = select(cls)
+
+        if tenant_id is not None and hasattr(cls, "tenant_id"):
+            stmt = stmt.where(cls.tenant_id == tenant_id)
+
         if filters:
             skip_fields = getattr(cls, "__filterable_skip__", set())
             for field, value in filters.items():
-                if field in skip_fields:
+                if field in skip_fields or field == "tenant_id":
                     continue
                 col = cls._resolve_filter_column(field)
                 if col is None:
                     continue
                 coerced = cls._coerce_filter_value(col, str(value))
                 if coerced is None:
-                    from sqlalchemy import false as sa_false
                     stmt = stmt.where(sa_false())
                     continue
                 if cls._is_string_column(col):
                     safe = str(coerced).replace("%", "\\%").replace("_", "\\_")
                     stmt = stmt.where(col.ilike(f"%{safe}%"))
+                elif cls._is_date_column(col):
+                    from datetime import timedelta
+                    next_day = coerced + timedelta(days=1)
+                    stmt = stmt.where(col >= coerced, col < next_day)
                 else:
                     stmt = stmt.where(col == coerced)
 

@@ -16,6 +16,9 @@ from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.categories.model import Category, ProductCategory
 from app.modules.sales.model import Sale, SaleItem
 from app.modules.orders.model import Order, OrderItem
+from app.modules.tenants.model import Tenant
+from app.modules.taxes.model import ProductTax, Tax
+from app.modules.customers.model import Customer
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

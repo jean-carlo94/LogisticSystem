@@ -23,6 +23,7 @@ class RoleUpdate(BaseModel):
 
 class RoleResponse(BaseModel):
     id: int
+    tenant_id: int
     name: str
     description: str | None = None
     created_at: datetime

@@ -22,3 +22,8 @@ class PermissionCode(str, Enum):
     ORDERS_CREATE = "orders_create"
     ORDERS_READ = "orders_read"
     ORDERS_MANAGE = "orders_manage"
+    TENANTS_MANAGE = "tenants_manage"
+    TAXES_MANAGE = "taxes_manage"
+    TAXES_READ = "taxes_read"
+    CUSTOMERS_READ = "customers_read"
+    CUSTOMERS_MANAGE = "customers_manage"

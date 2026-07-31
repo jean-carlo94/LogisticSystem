@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_audit_logger
 from app.core.audit import AuditLogger
 from app.core.database import get_db
+from app.modules.customers.repository import CustomerRepository
+from app.modules.customers.service import CustomerService
 from app.modules.products.repository import ProductRepository
 from app.modules.sales.repository import SaleItemRepository, SaleRepository
 from app.modules.sales.service import SaleService
@@ -20,5 +22,6 @@ async def get_sale_service(
         ShelfItemRepository(db),
         ShelfRepository(db),
         ProductRepository(db),
+        CustomerService(CustomerRepository(db), audit),
         audit,
     )

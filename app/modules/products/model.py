@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Enum, Float, Integer, String, Text, func
+from sqlalchemy import Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 import enum
@@ -18,8 +18,14 @@ class ProductState(str, enum.Enum):
 class Product(Base):
     __tablename__ = "products"
     __created_at_attr__ = "create_at"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "barcode", name="uq_product_tenant_barcode"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     _name: Mapped[str] = mapped_column("name", String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     _price: Mapped[float] = mapped_column("price", Float, nullable=False)
@@ -30,7 +36,7 @@ class Product(Base):
         nullable=False,
     )
     _barcode: Mapped[str | None] = mapped_column(
-        "barcode", String(128), unique=True, default=None, index=True
+        "barcode", String(128), default=None, index=True
     )
     image_path: Mapped[str | None] = mapped_column(String(500), default=None)
     _weight_kg: Mapped[float] = mapped_column("weight_kg", Float, default=0, nullable=False)
@@ -114,4 +120,8 @@ class Product(Base):
 
     categories: Mapped[list["Category"]] = relationship(
         "Category", secondary="product_categories", lazy="selectin"
+    )
+
+    taxes: Mapped[list["Tax"]] = relationship(
+        "Tax", secondary="product_taxes", lazy="selectin"
     )

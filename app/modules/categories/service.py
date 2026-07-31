@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from app.core.audit import AuditLogger
-from app.core.exceptions import ConflictException, NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
+from app.core.tenant import current_tenant_id
 from app.modules.categories.model import Category
 from app.modules.categories.repository import CategoryRepository
 from app.modules.categories.schema import CategoryCreate, CategoryUpdate
@@ -21,6 +22,8 @@ class CategoryService:
         return PaginatedResponse.of(list(items), total, page, size)
 
     async def create(self, data: CategoryCreate, user_id: int) -> Category:
+        if current_tenant_id.get() is None:
+            raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
         if await self.repo.find_by_name(data.name):
             raise ConflictException("El nombre ya está en uso")
         category = await self.repo.create(**data.model_dump())

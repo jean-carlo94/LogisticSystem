@@ -3,9 +3,10 @@ from __future__ import annotations
 from fastapi import UploadFile
 
 from app.core.audit import AuditLogger
-from app.core.exceptions import ConflictException, NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
 from app.core.storage import generate_filename, get_storage
+from app.core.tenant import current_tenant_id
 from app.modules.products.model import ProductState
 from app.modules.products.model import Product
 from app.modules.products.repository import ProductRepository
@@ -30,13 +31,16 @@ class ProductService:
         return await self.repo.get_by_id(product_id)
 
     async def create(self, product_in: ProductCreate, user_id: int) -> Product:
+        if current_tenant_id.get() is None:
+            raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
         if product_in.barcode:
             existing = await self.repo.find_by_barcode(product_in.barcode)
             if existing:
                 raise ConflictException("El código de barras ya está en uso")
 
         category_ids = product_in.category_ids
-        data = product_in.model_dump(exclude={"category_ids"})
+        tax_ids = product_in.tax_ids
+        data = product_in.model_dump(exclude={"category_ids", "tax_ids"})
 
         resolved = self._resolve_state(data["stock"], data["state"])
         data["state"] = resolved
@@ -45,6 +49,9 @@ class ProductService:
 
         if category_ids:
             await self.repo.set_product_categories(product.id, category_ids)
+        if tax_ids:
+            await self.repo.set_product_taxes(product.id, tax_ids)
+        if category_ids or tax_ids:
             product = await self.repo.get_by_id_with_categories(product.id)
 
         await self.audit.log_create("Product", product.id, user_id, product)
@@ -57,6 +64,7 @@ class ProductService:
 
         update_data = product_in.model_dump(exclude_unset=True)
         category_ids = update_data.pop("category_ids", None)
+        tax_ids = update_data.pop("tax_ids", None)
 
         if "barcode" in update_data and update_data["barcode"] != product.barcode:
             if update_data["barcode"]:
@@ -76,6 +84,9 @@ class ProductService:
 
         if category_ids is not None:
             await self.repo.set_product_categories(product.id, category_ids)
+        if tax_ids is not None:
+            await self.repo.set_product_taxes(product.id, tax_ids)
+        if category_ids is not None or tax_ids is not None:
             product = await self.repo.get_by_id_with_categories(product.id)
 
         if product.state != old_state:
@@ -101,6 +112,11 @@ class ProductService:
         if await self.repo.has_sale_history(product_id):
             raise ConflictException(
                 "No se puede eliminar un producto con historial de ventas"
+            )
+
+        if await self.repo.has_order_history(product_id):
+            raise ConflictException(
+                "No se puede eliminar un producto con pedidos asociados"
             )
 
         if product.image_path:
