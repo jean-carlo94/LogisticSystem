@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
@@ -61,41 +63,43 @@ class SaleService:
                     f"Producto {item_in.product_id} no encontrado"
                 )
 
-            shelf_item = shelf_items_map.get((item_in.shelf_id, item_in.product_id))
-            if not shelf_item:
-                raise NotFoundException(
-                    f"Producto {item_in.product_id} no asignado a la estantería "
-                    f"{item_in.shelf_id}"
-                )
-
-            if shelf_item.quantity < item_in.quantity:
-                raise ConflictException(
-                    f"Stock insuficiente en estantería {item_in.shelf_id} para "
-                    f"'{product.name}': hay {shelf_item.quantity}, "
-                    f"solicitados {item_in.quantity}"
-                )
-
             if product.stock < item_in.quantity:
                 raise ConflictException(
                     f"Stock insuficiente en inventario para '{product.name}': "
                     f"hay {product.stock}, solicitados {item_in.quantity}"
                 )
 
+            shelf_item = None
+            if item_in.shelf_id is not None:
+                shelf_item = shelf_items_map.get((item_in.shelf_id, item_in.product_id))
+                if not shelf_item:
+                    raise NotFoundException(
+                        f"Producto {item_in.product_id} no asignado a la estantería "
+                        f"{item_in.shelf_id}"
+                    )
+                if shelf_item.quantity < item_in.quantity:
+                    raise ConflictException(
+                        f"Stock insuficiente en estantería {item_in.shelf_id} para "
+                        f"'{product.name}': hay {shelf_item.quantity}, "
+                        f"solicitados {item_in.quantity}"
+                    )
+
             subtotal = round(item_in.quantity * item_in.unit_price, 2)
             total += subtotal
 
-            new_shelf_qty = shelf_item.quantity - item_in.quantity
-            if new_shelf_qty == 0:
-                await self.shelf_item_repo.delete(shelf_item)
-                await self.audit.log_delete(
-                    "ShelfItem", shelf_item.id, user_id, shelf_item
-                )
-            else:
-                await self.shelf_item_repo.update(shelf_item, quantity=new_shelf_qty)
-                await self.audit.log_update(
-                    "ShelfItem", shelf_item.id, user_id,
-                    {"quantity": new_shelf_qty},
-                )
+            if shelf_item:
+                new_shelf_qty = shelf_item.quantity - item_in.quantity
+                if new_shelf_qty == 0:
+                    await self.shelf_item_repo.delete(shelf_item)
+                    await self.audit.log_delete(
+                        "ShelfItem", shelf_item.id, user_id, shelf_item
+                    )
+                else:
+                    await self.shelf_item_repo.update(shelf_item, quantity=new_shelf_qty)
+                    await self.audit.log_update(
+                        "ShelfItem", shelf_item.id, user_id,
+                        {"quantity": new_shelf_qty},
+                    )
 
             original_stock = product.stock
             new_stock = product.stock - item_in.quantity
@@ -144,7 +148,7 @@ class SaleService:
         items = await self.sale_item_repo.get_items_by_sale(sale_id)
 
         product_ids = list(set(i.product_id for i in items))
-        shelf_ids = list(set(i.shelf_id for i in items))
+        shelf_ids = list(set(i.shelf_id for i in items if i.shelf_id is not None))
 
         products_map = {}
         if product_ids:
@@ -159,14 +163,14 @@ class SaleService:
         item_responses = []
         for item in items:
             product = products_map.get(item.product_id)
-            shelf = shelves_map.get(item.shelf_id)
+            shelf = shelves_map.get(item.shelf_id) if item.shelf_id is not None else None
             item_responses.append(
                 SaleItemResponse(
                     id=item.id,
                     product_id=item.product_id,
                     product_name=product.name if product else "?",
                     shelf_id=item.shelf_id,
-                    shelf_code=shelf.code if shelf else "?",
+                    shelf_code=shelf.code if shelf else None,
                     quantity=item.quantity,
                     unit_price=item.unit_price,
                     subtotal=item.subtotal,

@@ -143,12 +143,6 @@ class Base(DeclarativeBase):
         await db.refresh(instance)
         return instance
 
-    async def save(self, db: AsyncSession) -> "Base":
-        db.add(self)
-        await db.flush()
-        await db.refresh(self)
-        return self
-
     async def update(self, db: AsyncSession, **kwargs) -> "Base":
         for key, value in kwargs.items():
             setattr(self, key, value)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResponse

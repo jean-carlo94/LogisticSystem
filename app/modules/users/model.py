@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -29,10 +28,6 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         "updatedAt", server_default=func.now(), onupdate=func.now(), nullable=False
     )
-
-    @classmethod
-    async def find_by_email(cls, db: AsyncSession, email: str):
-        return await db.scalar(select(cls).where(cls.email == email))
 
 
 class PasswordResetToken(Base):

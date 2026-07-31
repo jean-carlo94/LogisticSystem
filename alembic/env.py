@@ -15,6 +15,7 @@ from app.modules.roles.model import Permission, Role, RolePermission, UserRole
 from app.modules.shelves.model import Shelf, ShelfItem
 from app.modules.categories.model import Category, ProductCategory
 from app.modules.sales.model import Sale, SaleItem
+from app.modules.orders.model import Order, OrderItem
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

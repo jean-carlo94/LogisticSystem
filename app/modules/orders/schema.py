@@ -2,21 +2,23 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.modules.orders.model import OrderStatus
 
-class SaleItemCreate(BaseModel):
+
+class OrderItemCreate(BaseModel):
     product_id: int
     shelf_id: int | None = None
     quantity: int = Field(..., ge=1)
     unit_price: float = Field(..., gt=0)
 
 
-class SaleCreate(BaseModel):
+class OrderCreate(BaseModel):
     customer_name: str = Field(..., min_length=1, max_length=200)
     notes: str | None = Field(default=None, max_length=1000)
-    items: list[SaleItemCreate] = Field(..., min_length=1)
+    items: list[OrderItemCreate] = Field(..., min_length=1)
 
 
-class SaleItemResponse(BaseModel):
+class OrderItemResponse(BaseModel):
     id: int
     product_id: int
     product_name: str
@@ -27,17 +29,18 @@ class SaleItemResponse(BaseModel):
     subtotal: float
 
 
-class SaleResponse(BaseModel):
+class OrderResponse(BaseModel):
     id: int
     customer_name: str
     total: float
-    status: str
+    status: OrderStatus
     notes: str | None = None
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class SaleDetailResponse(SaleResponse):
-    items: list[SaleItemResponse] = []
+class OrderDetailResponse(OrderResponse):
+    items: list[OrderItemResponse] = []
     created_by: int

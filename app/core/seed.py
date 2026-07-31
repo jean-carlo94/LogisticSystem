@@ -62,8 +62,8 @@ async def seed_defaults():
                         permission_id=perm_map[code],
                     ))
 
-        admin_email = settings.ADMIN_EMAIL
-        admin_password = settings.ADMIN_PASSWORD
+        admin_email = settings.ADMIN_EMAIL or "admin@alunatechnologies.com"
+        admin_password = settings.ADMIN_PASSWORD or "admin123"
 
         if admin_email and admin_password:
             admin = await db.scalar(

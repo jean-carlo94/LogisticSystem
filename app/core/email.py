@@ -26,8 +26,6 @@ class EmailSender:
             logger.debug("RESEND_API_KEY not configured, skipping email to %s", to)
             return None
 
-        import resend
-
         params: resend.Emails.SendParams = {
             "from": settings.RESEND_FROM_EMAIL,
             "to": [to],

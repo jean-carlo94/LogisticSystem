@@ -16,12 +16,6 @@ class ShelfRepository(BaseRepository):
         )
         return list(result.all())
 
-    async def get_items(self, shelf_id: int):
-        result = await self.db.scalars(
-            select(ShelfItem).where(ShelfItem.shelf_id == shelf_id)
-        )
-        return result.all()
-
 
 class ShelfItemRepository(BaseRepository):
     model = ShelfItem

@@ -19,3 +19,6 @@ class PermissionCode(str, Enum):
     CATEGORIES_DELETE = "categories_delete"
     SALES_CREATE = "sales_create"
     SALES_READ = "sales_read"
+    ORDERS_CREATE = "orders_create"
+    ORDERS_READ = "orders_read"
+    ORDERS_MANAGE = "orders_manage"

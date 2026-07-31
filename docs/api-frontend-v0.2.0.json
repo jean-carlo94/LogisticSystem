@@ -1,5 +1,5 @@
 {
-  "_version": "0.2.1",
+  "_version": "0.3.0",
   "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API.",
 
   "base_url": "http://localhost:8000/api/v1",
@@ -640,7 +640,236 @@
     }
   },
 
-  "flujo_frontend_tipico": {
+    "categories": {
+      "list": {
+        "method": "GET",
+        "path": "/categories/",
+        "auth": "categories_read",
+        "query": { "page": "int", "size": "int", "name": "string (ILIKE, documentado en Swagger)" },
+        "response_shape": {
+          "id": "int",
+          "name": "string",
+          "description": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "name usa ILIKE: ?name=elec encuentra 'Electrodomésticos'.",
+          "ProductForm usa este endpoint con ?name= para búsqueda on-demand de categorías."
+        ]
+      },
+      "create": {
+        "method": "POST",
+        "path": "/categories/",
+        "auth": "categories_create",
+        "request_body": {
+          "name": "string (1-100, requerido, único)",
+          "description": "string|null (max 500)"
+        },
+        "response_shape": "mismo que list.items[0] (201 Created)",
+        "errores": { "409": "Si name ya existe: 'La categoría ya existe'" }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/categories/{id}",
+        "auth": "categories_update",
+        "request_body": "Todos opcionales (partial update)",
+        "response_shape": "mismo que list.items[0]"
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/categories/{id}",
+        "auth": "categories_delete",
+        "response": "204 No Content"
+      }
+    },
+
+    "sales": {
+      "_intro": "Las ventas descuentan stock del producto y opcionalmente de estantería. Si shelf_id es null, solo descuenta stock del producto. Si shelf_id está presente, descuenta de la estantería Y del producto.",
+
+      "list": {
+        "method": "GET",
+        "path": "/sales/",
+        "auth": "sales_read",
+        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), status (=), total (=), notes (ILIKE)" },
+        "response_shape": {
+          "id": "int",
+          "customer_name": "string",
+          "total": "float",
+          "status": "string (COMPLETED|CANCELLED)",
+          "notes": "string|null",
+          "created_at": "ISO8601"
+        }
+      },
+
+      "create": {
+        "method": "POST",
+        "path": "/sales/",
+        "auth": "sales_create",
+        "request_body": {
+          "customer_name": "string (1-200, requerido)",
+          "notes": "string|null (max 1000)",
+          "items": [
+            {
+              "product_id": "int (requerido)",
+              "shelf_id": "int|null (default null. Si null → solo descuenta stock producto. Si tiene valor → descuenta estantería + producto)",
+              "quantity": "int (>=1, requerido)",
+              "unit_price": "float (>0, requerido)"
+            }
+          ]
+        },
+        "response_shape": {
+          "id": "int",
+          "customer_name": "string",
+          "total": "float",
+          "status": "COMPLETED",
+          "notes": "string|null",
+          "created_at": "ISO8601",
+          "created_by": "int (user_id)",
+          "items": [
+            {
+              "id": "int",
+              "product_id": "int",
+              "product_name": "string",
+              "shelf_id": "int|null",
+              "shelf_code": "string|null",
+              "quantity": "int",
+              "unit_price": "float",
+              "subtotal": "float"
+            }
+          ]
+        },
+        "errores": {
+          "404": "Producto no encontrado o no asignado a estantería especificada",
+          "409": "Stock insuficiente en producto o estantería"
+        },
+        "frontend_notes": [
+          "Si shelf_id es null/omitido, solo se descuenta product.stock. No se toca estantería.",
+          "Si shelf_id tiene valor, valida que producto esté en esa estantería con stock suficiente.",
+          "La venta siempre descuenta product.stock sin importar shelf_id.",
+          "Los items deben tener al menos 1 producto."
+        ]
+      },
+
+      "get_detail": {
+        "method": "GET",
+        "path": "/sales/{id}",
+        "auth": "sales_read",
+        "response_shape": "mismo que create response"
+      }
+    },
+
+    "orders": {
+      "_intro": "Los pedidos tienen una máquina de estados: CREATED → PREPARING → READY → DELIVERED. Solo forward. Al hacer deliver, se crea una venta automáticamente. shelf_id es opcional como en sales.",
+
+      "list": {
+        "method": "GET",
+        "path": "/orders/",
+        "auth": "orders_read",
+        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), status (=), total (=), notes (ILIKE)" },
+        "response_shape": {
+          "id": "int",
+          "customer_name": "string",
+          "total": "float",
+          "status": "string (CREATED|PREPARING|READY|DELIVERED)",
+          "notes": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        }
+      },
+
+      "create": {
+        "method": "POST",
+        "path": "/orders/",
+        "auth": "orders_create",
+        "request_body": {
+          "customer_name": "string (1-200, requerido)",
+          "notes": "string|null (max 1000)",
+          "items": [
+            {
+              "product_id": "int (requerido)",
+              "shelf_id": "int|null (default null. Si se especifica, valida asignación + stock en estantería)",
+              "quantity": "int (>=1, requerido)",
+              "unit_price": "float (>0, requerido)"
+            }
+          ]
+        },
+        "response_shape": {
+          "id": "int",
+          "customer_name": "string",
+          "total": "float",
+          "status": "CREATED",
+          "notes": "string|null",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601",
+          "created_by": "int (user_id)",
+          "items": [
+            {
+              "id": "int",
+              "product_id": "int",
+              "product_name": "string",
+              "shelf_id": "int|null",
+              "shelf_code": "string|null",
+              "quantity": "int",
+              "unit_price": "float",
+              "subtotal": "float"
+            }
+          ]
+        },
+        "errores": {
+          "404": "Producto no encontrado o no asignado a estantería especificada",
+          "409": "Stock insuficiente en producto o estantería"
+        },
+        "frontend_notes": [
+          "Al crear, valida stock actual de producto y estantería (si shelf_id especificado).",
+          "El pedido no descuenta stock al crearse — solo valida disponibilidad.",
+          "El descuento real ocurre al hacer deliver (cuando se crea la venta)."
+        ]
+      },
+
+      "get_detail": {
+        "method": "GET",
+        "path": "/orders/{id}",
+        "auth": "orders_read",
+        "response_shape": "mismo que create response"
+      },
+
+      "prepare": {
+        "method": "POST",
+        "path": "/orders/{id}/prepare",
+        "auth": "orders_manage",
+        "request_body": null,
+        "response_shape": "mismo que detail (status cambia a PREPARING)",
+        "errores": { "409": "Transición inválida si no está en CREATED" },
+        "frontend_notes": ["Cambia estado de CREATED a PREPARING. Solo forward."]
+      },
+
+      "ready": {
+        "method": "POST",
+        "path": "/orders/{id}/ready",
+        "auth": "orders_manage",
+        "request_body": null,
+        "response_shape": "mismo que detail (status cambia a READY)",
+        "errores": { "409": "Transición inválida si no está en PREPARING" }
+      },
+
+      "deliver": {
+        "method": "POST",
+        "path": "/orders/{id}/deliver",
+        "auth": "orders_manage",
+        "request_body": null,
+        "response_shape": "mismo que detail (status cambia a DELIVERED)",
+        "errores": { "409": "Transición inválida si no está en READY; o stock insuficiente al crear venta" },
+        "frontend_notes": [
+          "Crea una venta automáticamente con los items del pedido.",
+          "Descuenta stock del producto y estantería (si shelf_id presente).",
+          "Si la venta falla por stock insuficiente, el pedido NO cambia a DELIVERED.",
+          "No re-valida stock de estantería más allá de lo que valida SaleService.create()."
+        ]
+      }
+    },
+
+    "flujo_frontend_tipico": {
     "buscar_producto_por_nombre_parcial": [
       "1. Input de búsqueda en frontend: usuario escribe 'mart'",
       "2. GET /products/?name=mart → devuelve 'Martillo grande' (ILIKE parcial)",
@@ -682,14 +911,23 @@
       "shelves_read": "mostrar lista de estanterías, ver detalle",
       "shelves_update": "mostrar botón 'Editar', asignar/quitar productos",
       "shelves_delete": "mostrar botón 'Eliminar estantería'",
+      "categories_create": "mostrar botón 'Nueva Categoría'",
+      "categories_read": "mostrar lista de categorías, ver detalle",
+      "categories_update": "mostrar botón 'Editar categoría'",
+      "categories_delete": "mostrar botón 'Eliminar categoría'",
+      "sales_create": "mostrar botón 'Nueva Venta'",
+      "sales_read": "mostrar lista de ventas, ver detalle",
+      "orders_create": "mostrar botón 'Nuevo Pedido'",
+      "orders_read": "mostrar lista de pedidos, ver detalle",
+      "orders_manage": "mostrar botones de transición (Preparar, Listo, Entregar)",
       "users_manage": "mostrar sección Admin → Usuarios",
       "roles_manage": "mostrar sección Admin → Roles",
       "events_read": "mostrar sección Auditoría"
     },
     "roles_default": {
       "Admin": "todos los permisos",
-      "Operator": "products_create, products_read, products_update, shelves_read, shelves_update",
-      "Viewer": "products_read, shelves_read"
+      "Operator": "products_create, products_read, products_update, shelves_read, shelves_update, categories_read, sales_create, sales_read, orders_create, orders_read, orders_manage",
+      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read"
     }
   }
 }

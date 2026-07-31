@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResponse
-from app.modules.roles.model import Role
+from app.modules.roles.model import Permission, Role, UserRole
 from app.modules.roles.repository import PermissionRepository, RoleRepository, UserRoleRepository
 from app.modules.roles.schema import RoleCreate, RoleUpdate
 
@@ -66,4 +68,14 @@ class RoleService:
             raise NotFoundException("Rol no encontrado")
         if not await self.user_role_repo.user_exists(user_id):
             raise NotFoundException("Usuario no encontrado")
-        await self.user_role_repo.assign_role(user_id, role_id)
+        from sqlalchemy import select
+        existing = await self.user_role_repo.db.scalar(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id,
+            )
+        )
+        if not existing:
+            ur = UserRole(user_id=user_id, role_id=role_id)
+            self.user_role_repo.db.add(ur)
+            await self.user_role_repo.db.flush()

@@ -10,7 +10,7 @@ class UserRepository(BaseRepository):
     model = User
 
     async def find_by_email(self, email: str):
-        return await User.find_by_email(self.db, email)
+        return await self.db.scalar(select(User).where(User.email == email))
 
     async def get_user_roles(self, user_id: int):
         from app.modules.roles.model import Role, UserRole

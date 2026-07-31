@@ -27,9 +27,6 @@ class Category(Base):
     def name(self, value: str):
         self._name = value.strip()
 
-    def __repr__(self) -> str:
-        return f"<Category(id={self.id}, name={self.name!r})>"
-
 
 class ProductCategory(Base):
     __tablename__ = "product_categories"

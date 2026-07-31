@@ -42,28 +42,10 @@ class PermissionRepository:
         result = await self.db.scalars(select(Permission).order_by(Permission.code))
         return result.all()
 
-    async def get_by_ids(self, permission_ids: list[int]):
-        result = await self.db.scalars(
-            select(Permission).where(Permission.id.in_(permission_ids))
-        )
-        return result.all()
-
 
 class UserRoleRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    async def assign_role(self, user_id: int, role_id: int) -> None:
-        existing = await self.db.scalar(
-            select(UserRole).where(
-                UserRole.user_id == user_id,
-                UserRole.role_id == role_id,
-            )
-        )
-        if not existing:
-            ur = UserRole(user_id=user_id, role_id=role_id)
-            self.db.add(ur)
-            await self.db.flush()
 
     async def user_exists(self, user_id: int) -> bool:
         from app.modules.users.model import User

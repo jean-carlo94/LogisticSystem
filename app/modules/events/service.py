@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.core.pagination import PaginatedResponse
 from app.modules.events.model import Event
 from app.modules.events.repository import EventRepository

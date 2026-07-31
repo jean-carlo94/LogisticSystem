@@ -28,12 +28,15 @@ app/
 │   ├── database.py           # async engine lazy + AsyncSession + Base (CRUD + filtros)
 │   ├── security.py           # JWT + bcrypt + get_current_user + require_permission
 │   ├── audit.py              # AuditLogger (serializa Pydantic/SQLAlchemy/dict)
-│   ├── pagination.py         # PaginatedResult + PaginatedResponse + PaginationParams + FilterParams
+│   ├── pagination.py         # PaginatedResponse + PaginationParams + FilterParams
 │   ├── storage.py            # StorageBackend ABC + LocalStorageBackend (S3 futuro)
 │   ├── permissions.py        # PermissionCode enum (constantes de permisos)
 │   ├── exceptions.py         # AppException + NotFound/Conflict/Forbidden/Unauthorized/BadRequest/Validation
 │   ├── repository.py         # BaseRepository ABC
-│   └── seed.py               # Carga seed.json → DB + admin default (primer arranque)
+│   ├── seed.py               # Carga seed.json → DB + admin default (primer arranque)
+│   ├── email.py              # Envío de emails (Resend/SMTP)
+│   ├── templates.py          # Templates Jinja2 para emails
+│   └── rate_limit.py         # Rate limiter in-memory
 ├── api/
 │   ├── dependencies.py       # get_audit_logger (dependencias compartidas)
 │   └── v1/api.py             # Registro de routers
@@ -42,7 +45,10 @@ app/
     ├── events/               # Audit log append-only (ActionType)
     ├── users/                # Auth + profile + image + admin CRUD
     ├── roles/                # CRUD roles, permisos, asignaciones
-    └── shelves/              # CRUD estanterías + items + validación capacidad
+    ├── shelves/              # CRUD estanterías + items + validación capacidad
+    ├── categories/           # CRUD categorías + asignación a productos (ProductCategory)
+    ├── sales/                # Crear ventas, descuento de stock producto + estantería
+    └── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
 ```
 
 ### Layer chain (STRICT)
@@ -82,6 +88,8 @@ def endpoint(service_a: ServiceA, service_b: ServiceB): ...
 def endpoint(db: Session = Depends(get_db)): ...
 
 # ❌ Service importing from another module's service (creates coupling)
+#    Excepción: OrderService inyecta SaleService via deps.py para crear venta al entregar pedido.
+#    Esto es intencional — duplicar lógica de venta sería peor que el acoplamiento.
 from app.modules.roles.service import RoleService
 
 # ❌ List endpoint without PaginationParams — pagination silently broken
@@ -156,6 +164,8 @@ def name(self, value: str):
 - **BaseRepository** (`app/core/repository.py`): ABC with `model: type[Base]`. Provides `get_all`, `get_by_id`, `create`, `update`, `delete`.
 - **Property setters**: Model properties (e.g., `name.strip()`, `price.round(2)`, `stock.max(0)`, `weight_kg.max(0)`) auto-triggered via `Base._new()` and `Base.update()` using `setattr`. No manual `__init__` needed.
 - **Product state machine** (`app/modules/products/service.py:_resolve_state`): stock=0 → NO_STOCK, stock>0 + current NO_STOCK → ACTIVE, else leave as-is.
+- **Order state machine** (`app/modules/orders/service.py`): CREATED → PREPARING → READY → DELIVERED. Solo forward. Cada transición es un endpoint separado (`POST /orders/{id}/prepare`, `/ready`, `/deliver`). Al hacer `deliver`, `OrderService` crea automáticamente una venta via `SaleService.create()`. `SaleService` se inyecta en `OrderService` vía `deps.py` (excepción intencional a la regla de no acoplar servicios).
+- **Orders shelf optional**: `OrderItem.shelf_id` es nullable. Si se especifica, valida que el producto esté asignado a esa estantería y con stock suficiente. Si no, solo valida producto + stock general. Al entregar, la venta resultante respeta el `shelf_id` (o lo omite) del pedido original.
 - **Events append-only**: GET only. Written via `AuditLogger` inside services. Generic: `entity_type + entity_id + user_id + action`.
 - **Audit logging**: `AuditLogger` (`app/core/audit.py`) serializes Pydantic schemas, SQLAlchemy entities (via `class_mapper`), dicts. Filters `hashed_password`. Injected via `Depends(get_audit_logger)`.
 - **RBAC**: `PermissionCode` enum in `app/core/permissions.py`. `require_permission(code)` dependency in routes. `is_super_admin=True` bypasses all checks. Seed in `app/seed.json`.
@@ -170,7 +180,7 @@ def name(self, value: str):
 - **Security headers**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`, `Referrer-Policy`, `Cache-Control` aplicados en middleware HTTP.
 - **Body size limit**: `REQUEST_BODY_MAX_SIZE_MB` (default 10). Retorna 413 si `content-length` excede el límite.
 - **SECRET_KEY**: Validación de longitud mínima 32 caracteres vía `@field_validator` en Settings.
-- **Admin seed**: Credenciales vía `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars. Sin hardcodeos. Si no se definen, no se crea admin.
+- **Admin seed**: Credenciales vía `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars. Si no se definen, usa fallback `admin@alunatechnologies.com` / `admin123`. `is_super_admin=True`, asignado al rol Admin.
 - **Docker**: Multi-stage build (gcc/libpq-dev solo en stage builder). `.dockerignore` excluye `.env`, `.git`, `venv/`, etc.
 - **CORS**: `CORS_ORIGINS` (list[str] en JSON). Vacío = `allow_origins=["*"]` sin credenciales. Con orígenes explícitos → `allow_credentials=True` y `Access-Control-Allow-Credentials: true`. Si el frontend usa `credentials: 'include'` o `Authorization`, configurar orígenes explícitos: `CORS_ORIGINS=["http://localhost:5173"]`. Pasar como env var en docker-compose para que no dependa solo del archivo `.env`.
 
@@ -224,10 +234,10 @@ async def list_items(
 ### Service pattern para filtros
 
 ```python
-async def get_all(self, page=1, size=20, filters: dict | None = None) -> PaginatedResult[MyModel]:
+async def get_all(self, page=1, size=20, filters: dict | None = None) -> PaginatedResponse[MyModel]:
     skip = (page - 1) * size
     items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
-    return PaginatedResult.of(list(items), total, page, size)
+    return PaginatedResponse.of(list(items), total, page, size)
 ```
 
 ## Storage (imágenes)
@@ -350,8 +360,6 @@ class ShelfDetailResponse(ShelfResponse):
 - `is_super_admin=True`, asignado al rol Admin
 
 Idempotente: solo corre si tabla `permissions` está vacía.
-
-`scripts/seed_electrodomesticos.py` — script de seed masivo standalone: 200 productos, 200 estanterías, 200 usuarios con roles variados. Usa acceso directo a DB para velocidad.
 
 ## DB engine (lazy)
 
