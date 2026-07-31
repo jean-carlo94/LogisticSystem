@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Query, status
@@ -7,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import require_permission
 from app.modules.tenants.deps import get_tenant_service
-from app.modules.tenants.schema import TenantCreate, TenantResponse, TenantUpdate
+from app.modules.tenants.schema import TenantCreate, TenantResponse, TenantSettingsUpdate, TenantUpdate
 from app.modules.tenants.service import TenantService
 from app.core.permissions import PermissionCode
 
