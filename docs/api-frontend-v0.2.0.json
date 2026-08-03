@@ -1,6 +1,6 @@
 {
-  "_version": "0.4.0",
-  "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API. Incluye multitenant.",
+  "_version": "0.5.0",
+  "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API. Incluye multitenant y POS.",
 
   "base_url": "http://localhost:8000/api/v1",
   "auth_header": "Authorization: Bearer {token}",
@@ -332,6 +332,18 @@
         "response_shape": "mismo que list.items[0]"
       },
 
+      "by_barcode": {
+        "method": "GET",
+        "path": "/products/by-barcode/{barcode}",
+        "auth": "products_read",
+        "response_shape": "mismo que list.items[0] (incluye taxes)",
+        "frontend_notes": [
+          "Endpoint rápido para escanear código de barras en POS.",
+          "Retorna producto con taxes (name + rate) para calcular total.",
+          "Usar en flujo de stations/add_items para obtener unit_price del producto."
+        ]
+      },
+
       "create": {
         "method": "POST",
         "path": "/products/",
@@ -523,6 +535,16 @@
         "path": "/auth/me/image",
         "auth": "token requerido",
         "response": "204 No Content"
+      },
+
+      "pin_login": {
+        "method": "POST",
+        "path": "/auth/pin-login",
+        "auth": "público (rate limit: 3 intentos/min)",
+        "request_body": {"email": "string", "pin": "string (4-6 dígitos)"},
+        "response_shape": {"access_token": "string (JWT)", "token_type": "bearer"},
+        "errores": {"401": "Credenciales invalidas", "429": "Demasiados intentos"},
+        "frontend_notes": ["Login rápido para cajeros. El admin debe setear el PIN primero (PUT /users/{id}/pin)."]
       }
     },
 
@@ -591,6 +613,15 @@
       },
 
       "delete_image": { "method": "DELETE", "path": "/users/{id}/image", "auth": "users_manage", "response": "204 No Content" },
+
+      "set_pin": {
+        "method": "PUT",
+        "path": "/users/{id}/pin",
+        "auth": "users_manage",
+        "request_body": {"pin": "string (4-6 dígitos)"},
+        "response": "204 No Content",
+        "frontend_notes": ["Setea/resetea el PIN de un cajero. El PIN se hashea con bcrypt (mismo mecanismo que password)."]
+      },
 
       "get_roles": {
         "method": "GET",
@@ -959,7 +990,7 @@
         "path": "/sales/",
         "auth": "sales_create",
         "request_body": {
-          "customer_name": "string (1-200, requerido)",
+          "customer_name": "string (default 'Cliente mostrador', opcional — si se omite no se busca/reutiliza cliente)",
           "customer_email": "string|null (opcional, si se envía se busca/reutiliza cliente existente)",
           "customer_phone": "string|null (max 30)",
           "customer_document": "string|null (max 30, RUT/DNI/CUIT)",
@@ -984,6 +1015,7 @@
           "customer_id": "int|null",
           "total": "float",
           "status": "COMPLETED",
+          "payment_status": "PENDING",
           "notes": "string|null",
           "created_at": "ISO8601",
           "created_by": "int (user_id)",
@@ -1009,9 +1041,66 @@
           "Si shelf_id es null/omitido, solo se descuenta product.stock. No se toca estantería.",
           "Si shelf_id tiene valor, valida que producto esté en esa estantería con stock suficiente.",
           "La venta siempre descuenta product.stock sin importar shelf_id.",
-          "Los items deben tener al menos 1 producto."
+          "Los items deben tener al menos 1 producto.",
+          "customer_name es opcional — si no se envía 'vende anónimo' con customer_name='Cliente mostrador' y no crea/busca cliente.",
+          "payment_status inicia en PENDING. Se actualiza automáticamente al registrar pagos."
         ]
       },
+
+      "cancel": {
+        "method": "POST",
+        "path": "/sales/{id}/cancel",
+        "auth": "sales_cancel",
+        "request_body": null,
+        "response_shape": {
+          "id": "int",
+          "status": "CANCELLED",
+          "payment_status": "REFUNDED",
+          "message": "Venta cancelada. Stock restaurado."
+        },
+        "errores": {
+          "409": "Venta ya cancelada o ya pagada"
+        },
+        "frontend_notes": [
+          "Restaura stock de productos y estanterías.",
+          "Solo funciona si la venta NO está pagada (payment_status != PAID).",
+          "Status cambia a CANCELLED, payment_status a REFUNDED."
+        ]
+      },
+
+      "receipt": {
+        "method": "GET",
+        "path": "/sales/{id}/receipt",
+        "auth": "sales_read",
+        "response_shape": {
+          "sale_id": "int",
+          "store_name": "string",
+          "store_slug": "string",
+          "customer_name": "string",
+          "items": [
+            {
+              "product_name": "string",
+              "quantity": "int",
+              "unit_price": "float",
+              "subtotal": "float",
+              "tax_amount": "float",
+              "taxes": [{"name": "string", "rate": "float", "amount": "float"}]
+            }
+          ],
+          "subtotal": "float",
+          "tax_total": "float",
+          "total": "float",
+          "payments": [{"id": "int", "method": "string", "amount": "float"}],
+          "status": "string",
+          "payment_status": "string",
+          "created_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "JSON completo para renderizar recibo/ticket en frontend.",
+          "payments es array con método y monto de cada pago registrado.",
+          "items.taxes es el desglose de impuestos por línea."
+        ]
+      }
 
       "get_detail": {
         "method": "GET",
@@ -1214,6 +1303,148 @@
       }
     },
 
+    "payments": {
+      "_intro": "Registro de pagos por venta. Soporta split payments (múltiples pagos para una venta). Al registrar pagos que suman el total, la venta se marca como PAID automáticamente.",
+      "list": {
+        "method": "GET", "path": "/payments/", "auth": "payments_read",
+        "response_shape": {"id": "int", "sale_id": "int", "method": "string", "amount": "float", "reference": "string|null", "created_at": "ISO8601"}
+      },
+      "create": {
+        "method": "POST", "path": "/payments/", "auth": "payments_manage",
+        "request_body": {"sale_id": "int", "method": "string (CASH|CARD|TRANSFER|WALLET|OTHER)", "amount": "float (>0)", "reference": "string|null"},
+        "response_shape": "mismo que list.items[0]",
+        "errores": {"400": "Monto excede saldo pendiente", "409": "Venta cancelada o reembolsada"}
+      },
+      "by_sale": {
+        "method": "GET", "path": "/payments/by-sale/{sale_id}", "auth": "payments_read",
+        "response_shape": "[list de PaymentResponse]"
+      }
+    },
+
+    "cash_register": {
+      "_intro": "Caja registradora. Solo 1 sesión OPEN por tenant. Al cerrar calcula expected_cash = opening_amount + Σ cash payments del turno. discrepancy = closing_amount - expected.",
+      "current": {"method": "GET", "path": "/cash-register/", "auth": "cash_register_read"},
+      "open": {
+        "method": "POST", "path": "/cash-register/open", "auth": "cash_register_manage",
+        "request_body": {"opening_amount": "float (>=0)"},
+        "errores": {"409": "Ya existe una caja abierta"}
+      },
+      "close": {
+        "method": "POST", "path": "/cash-register/close", "auth": "cash_register_manage",
+        "request_body": {"closing_amount": "float (>=0)", "notes": "string|null"},
+        "response_shape": "CashRegisterResponse (incluye expected_cash + discrepancy)"
+      },
+      "history": {
+        "method": "GET", "path": "/cash-register/history", "auth": "cash_register_read",
+        "response_shape": "PaginatedResponse[CashRegisterResponse]"
+      }
+    },
+
+    "stations": {
+      "_intro": "Puntos de servicio genéricos. Aplica a mesas de restaurante, habitaciones de hotel, terminales de bar, mostrador retail, delivery. Una estación puede tener máximo 1 sesión OPEN. Los items pasan por estados CREATED→PREPARING→READY→DELIVERED. Al close se crea una Sale con impuestos (stock se descuenta en ese momento, no al agregar items). DELETE item solo cambia status a CANCELLED (no borra). Transfer mueve sesión completa a otra estación.",
+
+      "list": {
+        "method": "GET", "path": "/stations/", "auth": "stations_read",
+        "query": {"page": "int", "size": "int", "code": "string (ILIKE)", "name": "string (ILIKE)", "area": "string (ILIKE)", "status": "string (AVAILABLE|OCCUPIED|RESERVED|MAINTENANCE)"},
+        "response_shape": {"id": "int", "code": "string", "name": "string|null", "area": "string|null", "capacity": "int", "status": "string", "created_at": "ISO8601", "updated_at": "ISO8601"}
+      },
+
+      "create": {
+        "method": "POST", "path": "/stations/", "auth": "stations_manage",
+        "request_body": {"code": "string (1-50, único por tenant)", "name": "string|null", "area": "string|null (ej: 'SALON', 'BAR', 'HABITACIONES')", "capacity": "int (>=1, default 1)"},
+        "response_shape": "StationResponse (201)",
+        "errores": {"409": "El código de estación ya existe"}
+      },
+
+      "get_detail": {
+        "method": "GET", "path": "/stations/{id}", "auth": "stations_read",
+        "response_shape": "StationDetailResponse: StationResponse + active_session: StationSessionResponse|null (null si no hay sesión abierta)"
+      },
+
+      "update": {
+        "method": "PUT", "path": "/stations/{id}", "auth": "stations_manage",
+        "request_body": "Todos opcionales: code, name, area, capacity, status"
+      },
+
+      "delete": {
+        "method": "DELETE", "path": "/stations/{id}", "auth": "stations_manage",
+        "errores": {"409": "No se puede eliminar una estación con sesión abierta"}
+      },
+
+      "open": {
+        "method": "POST", "path": "/stations/{id}/open", "auth": "stations_manage",
+        "request_body": {"customer_name": "string (default 'Cliente mostrador')", "customer_email": "string|null", "customer_phone": "string|null", "customer_document": "string|null", "customer_address": "string|null"},
+        "response_shape": "StationSessionResponse {id, station_id, customer_id|null, customer_name, total, status: 'OPEN', sale_id|null, created_by, opened_at, closed_at|null, items: []}",
+        "errores": {"409": "Estación ya tiene sesión abierta o está en mantenimiento"},
+        "frontend_notes": ["Abre sesión y cambia station.status a OCCUPIED automáticamente."]
+      },
+
+      "close": {
+        "method": "POST", "path": "/stations/{id}/close", "auth": "stations_manage",
+        "response_shape": "StationSessionResponse (status: CLOSED, sale_id lleno, total calculado)",
+        "frontend_notes": ["Crea Sale con items no cancelados (incluye impuestos). Descuenta stock. station.status → AVAILABLE."]
+      },
+
+      "cancel_session": {
+        "method": "POST", "path": "/stations/{id}/cancel", "auth": "stations_manage",
+        "response_shape": "StationSessionResponse (status: CANCELLED)",
+        "frontend_notes": ["Cancela sin cobrar. station.status → AVAILABLE."]
+      },
+
+      "get_items": {
+        "method": "GET", "path": "/stations/{id}/items", "auth": "stations_read",
+        "response_shape": "[SessionItemResponse {id, session_id, product_id, product_name, quantity, unit_price, subtotal, status, notes|null}]"
+      },
+
+      "add_items": {
+        "method": "POST", "path": "/stations/{id}/items", "auth": "stations_manage",
+        "request_body": {"items": [{"product_id": "int", "quantity": "int (>=1)", "notes": "string|null"}]},
+        "response_shape": "[SessionItemResponse] (201, status=CREATED)",
+        "errores": {"404": "Producto no encontrado o no hay sesión abierta"},
+        "frontend_notes": ["unit_price es snapshot del precio del producto al momento de agregar. Cambios de precio posteriores no afectan."]
+      },
+
+      "update_item": {
+        "method": "PUT", "path": "/stations/{id}/items/{item_id}", "auth": "stations_manage",
+        "request_body": {"quantity": "int|null (>=1, opcional)", "notes": "string|null"},
+        "errores": {"409": "Solo se pueden modificar ítems en estado CREATED"}
+      },
+
+      "cancel_item": {
+        "method": "DELETE", "path": "/stations/{id}/items/{item_id}", "auth": "stations_manage",
+        "frontend_notes": ["No borra el registro. Cambia status a CANCELLED (trazabilidad: 'el cliente pidió, luego canceló')."]
+      },
+
+      "prepare_item": {"method": "POST", "path": "/stations/{id}/items/{item_id}/prepare", "auth": "stations_manage"},
+      "ready_item": {"method": "POST", "path": "/stations/{id}/items/{item_id}/ready", "auth": "stations_manage"},
+      "deliver_item": {"method": "POST", "path": "/stations/{id}/items/{item_id}/deliver", "auth": "stations_manage"},
+
+      "transfer": {
+        "method": "POST", "path": "/stations/{id}/transfer/{target_id}", "auth": "stations_manage",
+        "errores": {"404": "Estación origen/destino no encontrada", "409": "Destino no disponible o ya tiene sesión"},
+        "frontend_notes": ["Mueve sesión completa. Origen→AVAILABLE, destino→OCCUPIED."]
+      }
+    },
+
+    "flujo_frontend_pos": {
+      "flujo_mesa_restaurante": [
+        "1. Mesero: POST /stations/MESA-01/open (abre mesa)",
+        "2. Escanea/busca producto: GET /products/by-barcode/7791234567890 → {id, name, price, taxes, stock, image_url}",
+        "3. Agrega items: POST /stations/MESA-01/items {items: [{product_id:5, qty:2, notes:'sin sal'}]}",
+        "4. Repite 2-3 para más productos",
+        "5. Cocina: POST .../prepare → CREATED→PREPARING, /ready, /deliver",
+        "6. Cobrar: POST /stations/MESA-01/close → crea Sale con taxes, station→AVAILABLE",
+        "7. Registrar pago: POST /payments {sale_id, method:'CASH', amount:total}"
+      ],
+      "flujo_pos_retail": [
+        "1. Cajero: POST /stations/POS-01/open",
+        "2. Escanea: GET /products/by-barcode/{code}",
+        "3. Agrega: POST /stations/POS-01/items",
+        "4. Cobrar: POST /stations/POS-01/close → crea Sale",
+        "5. Registrar pago: POST /payments"
+      ]
+    },
+
     "flujo_frontend_tipico": {
     "buscar_producto_por_nombre_parcial": [
       "1. Input de búsqueda en frontend: usuario escribe 'mart'",
@@ -1263,6 +1494,7 @@
       "categories_delete": "mostrar botón 'Eliminar categoría'",
       "sales_create": "mostrar botón 'Nueva Venta'",
       "sales_read": "mostrar lista de ventas, ver detalle",
+      "sales_cancel": "mostrar botón 'Anular Venta'",
       "orders_create": "mostrar botón 'Nuevo Pedido'",
       "orders_read": "mostrar lista de pedidos, ver detalle",
       "orders_manage": "mostrar botones de transición (Preparar, Listo, Entregar)",
@@ -1273,12 +1505,18 @@
       "taxes_read": "mostrar lista de impuestos",
       "taxes_manage": "mostrar botones 'Nuevo Impuesto', 'Editar', 'Eliminar'",
       "customers_read": "mostrar lista de clientes",
-      "customers_manage": "mostrar botones 'Nuevo Cliente', 'Editar'"
+      "customers_manage": "mostrar botones 'Nuevo Cliente', 'Editar'",
+      "payments_read": "mostrar lista de pagos",
+      "payments_manage": "mostrar botón 'Registrar Pago'",
+      "stations_read": "mostrar sección Estaciones",
+      "stations_manage": "mostrar botones CRUD estaciones, abrir/cerrar, agregar items",
+      "cash_register_read": "mostrar estado de caja",
+      "cash_register_manage": "mostrar botones Abrir/Cerrar Caja"
     },
     "roles_default": {
       "Admin": "todos los permisos excepto tenants_manage (solo platform admin)",
-      "Operator": "products_create, products_read, products_update, shelves_read, shelves_update, categories_read, sales_create, sales_read, orders_create, orders_read, orders_manage, taxes_read, customers_read",
-      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read"
+      "Operator": "products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage",
+      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read"
     }
   }
 }

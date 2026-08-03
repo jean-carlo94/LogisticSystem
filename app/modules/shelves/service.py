@@ -145,8 +145,7 @@ class ShelfService:
         if existing:
             new_qty = existing.quantity + data.quantity
             await self._validate_stock(product.id, new_qty, exclude_item_id=existing.id)
-            other_weight = await self._get_total_weight(shelf_id, exclude_item_id=existing.id)
-            other_volume = await self._get_total_volume(shelf_id, exclude_item_id=existing.id)
+            other_weight, other_volume = await self._get_totals(shelf_id, exclude_item_id=existing.id)
             await self._validate_capacity(shelf, product, new_qty, other_weight, other_volume)
             item = await self.item_repo.update(existing, quantity=new_qty)
             await self.audit.log_update("ShelfItem", item.id, user_id, {"quantity": new_qty})
@@ -176,8 +175,7 @@ class ShelfService:
                 raise NotFoundException("Producto no encontrado")
 
             await self._validate_stock(item.product_id, data.quantity, exclude_item_id=item_id)
-            other_weight = await self._get_total_weight(shelf_id, exclude_item_id=item_id)
-            other_volume = await self._get_total_volume(shelf_id, exclude_item_id=item_id)
+            other_weight, other_volume = await self._get_totals(shelf_id, exclude_item_id=item_id)
             await self._validate_capacity(shelf, product, data.quantity, other_weight, other_volume)
 
         if data.quantity == 0:
@@ -241,38 +239,23 @@ class ShelfService:
         if errors:
             raise ValidationException("; ".join(errors))
 
-    async def _get_total_weight(self, shelf_id: int, exclude_item_id: int | None = None) -> float:
+    async def _get_totals(self, shelf_id: int, exclude_item_id: int | None = None) -> tuple[float, float]:
         items = await self.item_repo.get_items_by_shelf(shelf_id)
         product_ids = list({i.product_id for i in items if not exclude_item_id or i.id != exclude_item_id})
-        if not product_ids:
-            return 0.0
-        products = await self.item_repo.get_products_by_ids(product_ids)
-        products_map = {p.id: p for p in products}
-        total = 0.0
+        products_map = {}
+        if product_ids:
+            products = await self.item_repo.get_products_by_ids(product_ids)
+            products_map = {p.id: p for p in products}
+        weight = 0.0
+        volume = 0.0
         for item in items:
             if exclude_item_id and item.id == exclude_item_id:
                 continue
             product = products_map.get(item.product_id)
             if product:
-                total += product.weight_kg * item.quantity
-        return total
-
-    async def _get_total_volume(self, shelf_id: int, exclude_item_id: int | None = None) -> float:
-        items = await self.item_repo.get_items_by_shelf(shelf_id)
-        product_ids = list({i.product_id for i in items if not exclude_item_id or i.id != exclude_item_id})
-        if not product_ids:
-            return 0.0
-        products = await self.item_repo.get_products_by_ids(product_ids)
-        products_map = {p.id: p for p in products}
-        total = 0.0
-        for item in items:
-            if exclude_item_id and item.id == exclude_item_id:
-                continue
-            product = products_map.get(item.product_id)
-            if product:
-                product_volume = product.width_cm * product.height_cm * product.depth_cm
-                total += product_volume * item.quantity
-        return total
+                weight += product.weight_kg * item.quantity
+                volume += product.width_cm * product.height_cm * product.depth_cm * item.quantity
+        return weight, volume
 
     async def _get_total_assigned(self, product_id: int, exclude_item_id: int | None = None) -> int:
         items = await self.item_repo.get_items_by_product(product_id)

@@ -91,7 +91,9 @@ def endpoint(db: Session = Depends(get_db)): ...
 
 # ❌ Service importing from another module's service (creates coupling)
 #    Excepción: OrderService inyecta SaleService via deps.py para crear venta al entregar pedido.
-#    Esto es intencional — duplicar lógica de venta sería peor que el acoplamiento.
+#    Excepción: SaleService inyecta CustomerService via deps.py para find_or_create cliente.
+#    Excepción: StationService inyecta SaleService + CustomerService via deps.py para crear venta al close.
+#    Esto es intencional — duplicar lógica de venta/cliente sería peor que el acoplamiento.
 from app.modules.roles.service import RoleService
 
 # ❌ List endpoint without PaginationParams — pagination silently broken

@@ -12,7 +12,7 @@ from fastapi import UploadFile
 from app.core.audit import AuditLogger
 from app.core.config import settings
 from app.core.email import EmailSender
-from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException, ValidationException
+from app.core.exceptions import ConflictException, ForbiddenException, NotFoundException, UnauthorizedException, ValidationException
 from app.core.pagination import PaginatedResponse
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.storage import generate_filename, get_storage
@@ -86,14 +86,14 @@ class UserService:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         activation = await self.repo.find_valid_activation(token_hash)
         if not activation:
-            raise BadRequestException("Token invalido o expirado")
+            raise ValidationException("Token invalido o expirado")
 
         user = await self.repo.get_by_id(activation.user_id)
         if not user:
-            raise BadRequestException("Token invalido o expirado")
+            raise ValidationException("Token invalido o expirado")
 
         if user.is_active:
-            raise BadRequestException("La cuenta ya esta activada")
+            raise ValidationException("La cuenta ya esta activada")
 
         await self.repo.update(user, is_active=True)
         await self.repo.invalidate_user_activations(user.id)
@@ -117,6 +117,23 @@ class UserService:
         if not user.is_active:
             raise ForbiddenException("Cuenta no activada. Revisa tu correo para activarla.")
         return TokenResponse(access_token=create_access_token(user.id, user.token_version, user.tenant_id))
+
+    async def pin_login(self, email: str, pin: str) -> TokenResponse:
+        user = await self.repo.find_by_email(email)
+        if not user or not user.pin:
+            raise UnauthorizedException("Credenciales invalidas")
+        if not verify_password(pin, user.pin):
+            raise UnauthorizedException("Credenciales invalidas")
+        if not user.is_active:
+            raise ForbiddenException("Cuenta no activada")
+        return TokenResponse(access_token=create_access_token(user.id, user.token_version, user.tenant_id))
+
+    async def set_pin(self, user_id: int, pin: str, actor_id: int) -> None:
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            raise NotFoundException("Usuario no encontrado")
+        await self.repo.update(user, pin=hash_password(pin))
+        await self.audit.log_update("User", user.id, actor_id, {"pin": "set"})
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
@@ -142,7 +159,7 @@ class UserService:
         user = await self.repo.get_by_id(user_id)
         if not user:
             raise NotFoundException("Usuario no encontrado")
-        role = await self.repo.db.get(Role, role_id)
+        role = await Role.get_id(self.repo.db, role_id, tenant_id=user.tenant_id)
         if not role:
             raise NotFoundException("Rol no encontrado")
         if user.tenant_id is not None and user.tenant_id != role.tenant_id:
@@ -275,11 +292,11 @@ class UserService:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         reset_token = await self.repo.find_valid_token(token_hash)
         if not reset_token:
-            raise BadRequestException("Token invalido o expirado")
+            raise ValidationException("Token invalido o expirado")
 
         user = await self.repo.get_by_id(reset_token.user_id)
         if not user:
-            raise BadRequestException("Token invalido o expirado")
+            raise ValidationException("Token invalido o expirado")
 
         update_data = {"hashed_password": hash_password(new_password), "token_version": user.token_version + 1}
         if not user.is_active:

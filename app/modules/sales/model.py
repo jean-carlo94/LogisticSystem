@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 import enum
@@ -32,6 +32,9 @@ class Sale(Base):
     total: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[SaleStatus] = mapped_column(
         Enum(SaleStatus, name="sale_status"), nullable=False, default=SaleStatus.COMPLETED
+    )
+    payment_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="PENDING", server_default=text("'PENDING'")
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int] = mapped_column(

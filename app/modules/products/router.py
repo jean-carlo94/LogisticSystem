@@ -35,6 +35,18 @@ async def list_products(
     return await service.get_all(page=pag["page"], size=pag["size"], filters=merged or None)
 
 
+@router.get("/by-barcode/{barcode}", response_model=ProductResponse)
+async def get_product_by_barcode(
+    barcode: str,
+    service: ProductService = Depends(get_product_service),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+) -> ProductResponse:
+    product = await service.get_by_barcode(barcode)
+    if not product:
+        raise NotFoundException("Producto no encontrado")
+    return product
+
+
 @router.get("/{product_id}", response_model=ProductResponse)
 async def retrieve_product(
     product_id: int,

@@ -127,5 +127,14 @@ class ResendActivationRequest(BaseModel):
     email: EmailStr
 
 
+class PinLoginRequest(BaseModel):
+    email: EmailStr = Field(..., max_length=255)
+    pin: str = Field(..., min_length=4, max_length=6)
+
+
+class PinSetRequest(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=6)
+
+
 class MessageResponse(BaseModel):
     message: str

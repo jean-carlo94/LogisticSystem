@@ -24,11 +24,6 @@ class ForbiddenException(AppException):
         super().__init__(detail, 403)
 
 
-class BadRequestException(AppException):
-    def __init__(self, detail: str = "Solicitud incorrecta"):
-        super().__init__(detail, 400)
-
-
 class ValidationException(AppException):
     def __init__(self, detail: str = "Error de validación"):
         super().__init__(detail, 400)

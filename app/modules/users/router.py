@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.rate_limit import forgot_password_limiter, activate_limiter
 from app.core.security import get_current_user, require_permission
+from app.core.rate_limit import RateLimiter
+
+pin_login_limiter = RateLimiter(max_requests=3, window_seconds=60)
 from app.modules.users.deps import get_user_service
 from app.core.permissions import PermissionCode
 from app.modules.users.model import User
@@ -13,6 +16,7 @@ from app.modules.users.schema import (
     ForgotPasswordRequest, ActivationRequest, MessageResponse, ResendActivationRequest, ResetPasswordRequest,
     RoleInfo, TokenResponse, UserAdminResponse, UserAssignRole, UserCreate, UserLogin,
     UserProfileResponse, UserProfileUpdate, UserResponse, UserUpdate,
+    PinLoginRequest, PinSetRequest,
 )
 from app.modules.users.service import UserService
 
@@ -119,6 +123,19 @@ async def resend_activation(
     return MessageResponse(message="Si el email existe y la cuenta no esta activada, recibiras un nuevo correo")
 
 
+@auth_router.post("/pin-login", response_model=TokenResponse)
+async def pin_login(
+    data: PinLoginRequest,
+    request: Request,
+    service: UserService = Depends(get_user_service),
+) -> TokenResponse:
+    client = request.client.host if request.client else "unknown"
+    if not pin_login_limiter.is_allowed(client):
+        return JSONResponse(status_code=429, content={"detail": "Demasiados intentos. Intenta de nuevo mas tarde."})
+    pin_login_limiter.hit(client)
+    return await service.pin_login(data.email, data.pin)
+
+
 # ── Admin CRUD usuarios ──
 
 @users_router.post("/", response_model=UserAdminResponse, status_code=status.HTTP_201_CREATED)
@@ -208,3 +225,13 @@ async def delete_user_image(
     admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
 ):
     await service.delete_image(user_id, admin.id)
+
+
+@users_router.put("/{user_id}/pin", status_code=status.HTTP_204_NO_CONTENT)
+async def set_user_pin(
+    user_id: int,
+    data: PinSetRequest,
+    service: UserService = Depends(get_user_service),
+    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+):
+    await service.set_pin(user_id, data.pin, admin.id)

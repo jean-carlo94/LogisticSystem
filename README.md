@@ -1,6 +1,6 @@
-# LogisticSystem API
+# LogisticSystem API — POS + Inventory
 
-API REST multitenant con autenticación JWT, RBAC (roles/permisos), gestión de productos con imágenes y códigos de barras, estanterías de bodega con validación de capacidad, ventas, pedidos con state machine, y auditoría global. FastAPI + SQLAlchemy 2.0 async + PostgreSQL + Alembic.
+API REST multitenant con autenticación JWT, RBAC (roles/permisos), POS completo (ventas anónimas, pagos, caja registradora, estaciones/mesas, recibos), gestión de productos con imágenes y códigos de barras, estanterías de bodega con validación de capacidad, pedidos con state machine, y auditoría global. FastAPI + SQLAlchemy 2.0 async + PostgreSQL + Alembic.
 
 ## Arquitectura
 
@@ -50,12 +50,15 @@ app/
     ├── customers/            # CRUD clientes por tenant + auto-detección en ventas/pedidos
     ├── products/             # CRUD + state machine (ProductState) + images + QR + barcode + dimensions + taxes
     ├── events/               # Audit log append-only (ActionType, tenant_id nullable)
-    ├── users/                # Auth + profile + image + admin CRUD (tenant_id nullable)
+    ├── users/                # Auth + profile + image + admin CRUD + PIN login (tenant_id nullable)
     ├── roles/                # CRUD roles por tenant, permisos globales, asignaciones
     ├── shelves/              # CRUD estanterías + items + validación capacidad
     ├── categories/           # CRUD categorías por tenant + asignación a productos
-    ├── sales/                # Crear ventas, descuento de stock producto + estantería
-    └── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
+    ├── sales/                # Crear ventas + cancelación + recibo + descuento de stock producto + estantería
+    ├── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
+    ├── payments/             # Registro de pagos (cash/card/transfer/wallet) + split payments
+    ├── cash_register/        # Caja registradora: open/close, conteo, desfase
+    └── stations/             # Puntos de servicio genéricos: mesas/bar/hotel/delivery/mostrador
 ```
 
 ## Multitenant
@@ -131,6 +134,7 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 |--------|------|------|-------------|
 | `POST` | `/api/v1/auth/register` | No | Registrar usuario |
 | `POST` | `/api/v1/auth/login` | No | Login → JWT (24h, incluye `tid`) |
+| `POST` | `/api/v1/auth/pin-login` | No | Login rápido con PIN (cajeros) |
 | `GET` | `/api/v1/auth/me` | Sí | Perfil completo (roles + permisos) |
 | `PUT` | `/api/v1/auth/me` | Sí | Editar perfil propio |
 | `POST` | `/api/v1/auth/me/image` | Sí | Subir avatar |
@@ -155,6 +159,7 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
 | `GET` | `/api/v1/products/` | `products_read` | Listar (paginado + filtros) |
+| `GET` | `/api/v1/products/by-barcode/{barcode}` | `products_read` | Lookup rápido por código de barras (POS) |
 | `GET` | `/api/v1/products/{id}` | `products_read` | Obtener |
 | `POST` | `/api/v1/products/` | `products_create` | Crear |
 | `PUT` | `/api/v1/products/{id}` | `products_update` | Actualizar |
@@ -191,7 +196,9 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 |--------|------|---------|-------------|
 | `GET` | `/api/v1/sales/` | `sales_read` | Listar (paginado + filtros) |
 | `GET` | `/api/v1/sales/{id}` | `sales_read` | Detalle + items |
-| `POST` | `/api/v1/sales/` | `sales_create` | Crear venta (descuenta stock) |
+| `POST` | `/api/v1/sales/` | `sales_create` | Crear venta (descuenta stock, customer opcional) |
+| `POST` | `/api/v1/sales/{id}/cancel` | `sales_cancel` | Cancelar venta (restaura stock) |
+| `GET` | `/api/v1/sales/{id}/receipt` | `sales_read` | Recibo JSON (items, taxes, pagos) |
 
 ### Pedidos
 
@@ -203,6 +210,44 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 | `POST` | `/api/v1/orders/{id}/prepare` | `orders_manage` | CREATED → PREPARING |
 | `POST` | `/api/v1/orders/{id}/ready` | `orders_manage` | PREPARING → READY |
 | `POST` | `/api/v1/orders/{id}/deliver` | `orders_manage` | READY → DELIVERED (crea venta) |
+
+### Pagos
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/v1/payments/` | `payments_read` | Listar pagos |
+| `POST` | `/api/v1/payments/` | `payments_manage` | Registrar pago (cash/card/transfer/wallet) |
+| `GET` | `/api/v1/payments/by-sale/{id}` | `payments_read` | Pagos de una venta |
+
+### Caja Registradora
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/v1/cash-register/` | `cash_register_read` | Estado actual de caja |
+| `POST` | `/api/v1/cash-register/open` | `cash_register_manage` | Abrir caja con monto inicial |
+| `POST` | `/api/v1/cash-register/close` | `cash_register_manage` | Cerrar caja (conteo + desfase) |
+| `GET` | `/api/v1/cash-register/history` | `cash_register_read` | Historial de sesiones |
+
+### Estaciones (mesas/bar/hotel/delivery)
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/v1/stations/` | `stations_read` | Listar estaciones |
+| `POST` | `/api/v1/stations/` | `stations_manage` | Crear estación |
+| `GET` | `/api/v1/stations/{id}` | `stations_read` | Detalle + sesión activa |
+| `PUT` | `/api/v1/stations/{id}` | `stations_manage` | Editar estación |
+| `DELETE` | `/api/v1/stations/{id}` | `stations_manage` | Eliminar estación |
+| `POST` | `/api/v1/stations/{id}/open` | `stations_manage` | Abrir sesión (cliente opcional) |
+| `POST` | `/api/v1/stations/{id}/close` | `stations_manage` | Cerrar y cobrar (crea Sale) |
+| `POST` | `/api/v1/stations/{id}/cancel` | `stations_manage` | Cancelar sesión sin cobrar |
+| `GET` | `/api/v1/stations/{id}/items` | `stations_read` | Items de sesión activa |
+| `POST` | `/api/v1/stations/{id}/items` | `stations_manage` | Agregar items al carrito |
+| `PUT` | `/api/v1/stations/{id}/items/{item_id}` | `stations_manage` | Modificar cantidad/notas |
+| `DELETE` | `/api/v1/stations/{id}/items/{item_id}` | `stations_manage` | Cancelar item |
+| `POST` | `/api/v1/stations/{id}/items/{item_id}/prepare` | `stations_manage` | CREATED→PREPARING |
+| `POST` | `/api/v1/stations/{id}/items/{item_id}/ready` | `stations_manage` | PREPARING→READY |
+| `POST` | `/api/v1/stations/{id}/items/{item_id}/deliver` | `stations_manage` | READY→DELIVERED |
+| `POST` | `/api/v1/stations/{id}/transfer/{target}` | `stations_manage` | Mover sesión a otra estación |
 
 ### Eventos (auditoría)
 
@@ -237,6 +282,7 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 | `DELETE` | `/api/v1/users/{id}/image` | `users_manage` | Eliminar imagen |
 | `GET` | `/api/v1/users/{id}/roles` | `users_manage` | Ver roles |
 | `POST` | `/api/v1/users/{id}/roles` | `users_manage` | Asignar rol |
+| `PUT` | `/api/v1/users/{id}/pin` | `users_manage` | Setear PIN de cajero |
 
 ## Filtros genéricos
 
@@ -271,7 +317,7 @@ Campos bloqueados: `hashed_password` en users (ignorado por seguridad), `tenant_
 **Tablas:** `permissions` (global), `roles` (por tenant), `role_permissions` (n-m), `user_roles` (n-m).
 
 **Permisos** definidos en `app/core/permissions.py` (`PermissionCode` enum):
-`products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`, `categories_create`, `categories_read`, `categories_update`, `categories_delete`, `sales_create`, `sales_read`, `orders_create`, `orders_read`, `orders_manage`, `tenants_manage`
+`products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`, `categories_create`, `categories_read`, `categories_update`, `categories_delete`, `sales_create`, `sales_read`, `sales_cancel`, `orders_create`, `orders_read`, `orders_manage`, `tenants_manage`, `taxes_read`, `taxes_manage`, `customers_read`, `customers_manage`, `payments_read`, `payments_manage`, `stations_read`, `stations_manage`, `cash_register_read`, `cash_register_manage`
 
 **Seed** (`app/seed.json`):
 - Permisos globales (idempotente, se crean al primer arranque)
@@ -281,8 +327,8 @@ Campos bloqueados: `hashed_password` en users (ignorado por seguridad), `tenant_
 | Rol | Permisos |
 |-----|----------|
 | `Admin` | todos excepto `tenants_manage` |
-| `Operator` | products_create/read/update, shelves_read/update, categories_read, sales_create/read, orders_create/read/manage |
-| `Viewer` | products_read, shelves_read, categories_read, sales_read, orders_read, events_read |
+| `Operator` | products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage |
+| `Viewer` | products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read |
 
 **`require_permission(code)`** (`app/core/security.py`):
 - `is_super_admin=True` → bypass total
@@ -422,6 +468,7 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `customer_name` | str(200) | |
 | `total` | float | |
 | `status` | enum | COMPLETED\|CANCELLED |
+| `payment_status` | str | PENDING\|PAID\|PARTIALLY_PAID\|REFUNDED |
 | `notes` | str\|null | |
 | `created_by` | int | FK users |
 
@@ -449,6 +496,67 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `user_id` | int | FK users |
 | `description` | str\|null | JSON |
 | `create_at` | datetime | |
+
+### Payment
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `sale_id` | int | FK sales CASCADE |
+| `method` | enum | CASH\|CARD\|TRANSFER\|WALLET\|OTHER |
+| `amount` | float | monto pagado |
+| `reference` | str(100)\|null | referencia |
+
+### CashRegisterSession
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `tenant_id` | int | FK tenants |
+| `user_id` | int | FK users (cajero) |
+| `opening_amount` | float | monto inicial |
+| `closing_amount` | float\|null | monto contado al cierre |
+| `expected_cash` | float\|null | opening + Σ cash payments |
+| `discrepancy` | float\|null | closing - expected |
+| `status` | enum | OPEN\|CLOSED |
+
+### Station
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `tenant_id` | int | FK tenants |
+| `code` | str(50) | único por tenant |
+| `name` | str(100)\|null | "Ventana VIP" |
+| `area` | str(50)\|null | "Salón Principal" |
+| `capacity` | int | informativo (default 1) |
+| `status` | enum | AVAILABLE\|OCCUPIED\|RESERVED\|MAINTENANCE |
+
+### StationSession
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `station_id` | int | FK stations |
+| `customer_id` | int\|null | FK customers |
+| `customer_name` | str(200) | denormalizado |
+| `total` | float | calculado al close |
+| `status` | enum | OPEN\|CLOSED\|CANCELLED |
+| `sale_id` | int\|null | FK sales |
+| `created_by` | int | FK users |
+
+### StationSessionItem
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `session_id` | int | FK sessions |
+| `product_id` | int | FK products |
+| `quantity` | int | |
+| `unit_price` | float | snapshot |
+| `subtotal` | float | qty * unit_price |
+| `status` | enum | CREATED→PREPARING→READY→DELIVERED\|CANCELLED |
+| `notes` | str(500)\|null | |
 
 ### Tenant
 

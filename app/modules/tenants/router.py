@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import require_permission
 from app.modules.tenants.deps import get_tenant_service
-from app.modules.tenants.schema import TenantCreate, TenantResponse, TenantSettingsUpdate, TenantUpdate
+from app.modules.tenants.schema import TenantCreate, TenantResponse, TenantUpdate
 from app.modules.tenants.service import TenantService
 from app.core.permissions import PermissionCode
 
@@ -71,49 +71,3 @@ async def delete_tenant(
     user: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
 ):
     await service.delete(tenant_id, user.id)
-
-
-@router.put("/me/settings", response_model=TenantResponse)
-async def update_own_tenant_settings(
-    data: TenantSettingsUpdate,
-    service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
-):
-    from app.core.tenant import current_tenant_id
-    tid = current_tenant_id.get()
-    if not tid:
-        from app.core.exceptions import ForbiddenException
-        raise ForbiddenException("Solo disponible para usuarios con tenant")
-    return await service.update_settings(tid, data, user.id)
-
-
-@router.post("/me/api-key", response_model=TenantResponse)
-async def regenerate_own_api_key(
-    service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.ROLES_MANAGE)),
-):
-    from app.core.tenant import current_tenant_id
-    tid = current_tenant_id.get()
-    if not tid:
-        from app.core.exceptions import ForbiddenException
-        raise ForbiddenException("Solo disponible para usuarios con tenant")
-    return await service.regenerate_api_key(tid, user.id)
-
-
-@router.put("/{tenant_id}/settings", response_model=TenantResponse)
-async def update_tenant_settings(
-    tenant_id: int,
-    data: TenantSettingsUpdate,
-    service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
-):
-    return await service.update_settings(tenant_id, data, user.id)
-
-
-@router.post("/{tenant_id}/api-key", response_model=TenantResponse)
-async def regenerate_api_key(
-    tenant_id: int,
-    service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
-):
-    return await service.regenerate_api_key(tenant_id, user.id)

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
 
     DATABASE_URL: str
-    SECRET_KEY: str
+    SECRET_KEY: str = Field(min_length=32)
     ACCESS_TOKEN_EXPIRE_HOURS: int
     API_V1_STR: str
     PROJECT_NAME: str
@@ -26,13 +26,6 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     ADMIN_EMAIL: str = ""
     ADMIN_PASSWORD: str = ""
-
-    @field_validator("SECRET_KEY")
-    @classmethod
-    def validate_secret_key(cls, v: str) -> str:
-        if len(v) < 32:
-            raise ValueError("SECRET_KEY must be at least 32 characters long for security")
-        return v
 
 
 @lru_cache()

@@ -10,9 +10,13 @@ from app.modules.sales.model import SaleStatus
 from app.modules.sales.model import Sale
 from app.modules.sales.repository import SaleItemRepository, SaleRepository
 from app.modules.sales.schema import (
-    SaleCreate, SaleItemResponse, SaleDetailResponse,
+    SaleCreate, SaleItemResponse, SaleDetailResponse, SaleCancelResponse,
+    ReceiptResponse, ReceiptItemResponse, ReceiptTaxLine,
 )
 from app.modules.shelves.repository import ShelfItemRepository, ShelfRepository
+from app.modules.payments.repository import PaymentRepository
+from app.modules.payments.schema import PaymentResponse
+from app.modules.tenants.repository import TenantRepository
 
 
 class SaleService:
@@ -25,6 +29,8 @@ class SaleService:
         product_repo: ProductRepository,
         customer_service: CustomerService,
         audit: AuditLogger,
+        payment_repo: PaymentRepository,
+        tenant_repo: TenantRepository,
     ):
         self.sale_repo = sale_repo
         self.sale_item_repo = sale_item_repo
@@ -33,6 +39,8 @@ class SaleService:
         self.product_repo = product_repo
         self.customer_service = customer_service
         self.audit = audit
+        self.payment_repo = payment_repo
+        self.tenant_repo = tenant_repo
 
     async def get_all(
         self, page: int = 1, size: int = 20, filters: dict | None = None
@@ -46,15 +54,138 @@ class SaleService:
     async def get_by_id(self, sale_id: int) -> SaleDetailResponse:
         return await self._build_detail(sale_id)
 
+    async def cancel(self, sale_id: int, user_id: int) -> SaleCancelResponse:
+        sale = await self.sale_repo.get_by_id(sale_id)
+        if not sale:
+            raise NotFoundException("Venta no encontrada")
+
+        if sale.status == SaleStatus.CANCELLED:
+            raise ConflictException("La venta ya está cancelada")
+
+        if sale.payment_status == "PAID":
+            raise ConflictException(
+                "No se puede cancelar una venta ya pagada. Use devolución/reembolso"
+            )
+
+        items = await self.sale_item_repo.get_items_by_sale(sale_id)
+
+        for item in items:
+            product = await self.product_repo.get_by_id(item.product_id)
+            if product:
+                new_stock = product.stock + item.quantity
+                await self.product_repo.update(product, stock=new_stock)
+                await self.audit.log_update(
+                    "Product", product.id, user_id,
+                    {"stock": new_stock, "action": "cancel_sale", "sale_id": sale_id},
+                )
+
+            if item.shelf_id is not None:
+                shelf_items = await self.shelf_item_repo.get_items_by_product(item.product_id)
+                existing = next(
+                    (si for si in shelf_items if si.shelf_id == item.shelf_id), None
+                )
+                if existing:
+                    new_qty = existing.quantity + item.quantity
+                    await self.shelf_item_repo.update(existing, quantity=new_qty)
+                else:
+                    await self.shelf_item_repo.create(
+                        shelf_id=item.shelf_id,
+                        product_id=item.product_id,
+                        quantity=item.quantity,
+                    )
+                await self.audit.log_create(
+                    "ShelfItem", sale_id, user_id,
+                    {"action": "restore_from_cancel", "shelf_id": item.shelf_id,
+                     "product_id": item.product_id, "quantity": item.quantity},
+                )
+
+        await self.sale_repo.update(sale, status=SaleStatus.CANCELLED, payment_status="REFUNDED")
+        await self.audit.log_update(
+            "Sale", sale.id, user_id,
+            {"status": "CANCELLED", "previous_status": "COMPLETED"},
+        )
+
+        return SaleCancelResponse(
+            id=sale.id,
+            status="CANCELLED",
+            payment_status="REFUNDED",
+            message="Venta cancelada. Stock restaurado.",
+        )
+
+    async def get_receipt(self, sale_id: int, user_id: int) -> ReceiptResponse:
+        sale = await self.sale_repo.get_by_id(sale_id)
+        if not sale:
+            raise NotFoundException("Venta no encontrada")
+
+        items = await self.sale_item_repo.get_items_by_sale(sale_id)
+        product_ids = list(set(i.product_id for i in items))
+        products_map = {}
+        taxes_map = {}
+        if product_ids:
+            products = await self.shelf_item_repo.get_products_by_ids(product_ids)
+            products_map = {p.id: p for p in products}
+            taxes_map = await self.product_repo.get_products_taxes_batch(product_ids)
+
+        subtotal_total = 0.0
+        tax_total = 0.0
+        receipt_items = []
+        for item in items:
+            product = products_map.get(item.product_id)
+            tax_lines = []
+            taxes = taxes_map.get(item.product_id, [])
+            for tax in taxes:
+                line_tax = round(item.subtotal * tax.rate / 100, 2)
+                tax_lines.append(ReceiptTaxLine(
+                    name=tax.name,
+                    rate=tax.rate,
+                    amount=line_tax,
+                ))
+            subtotal_total += item.subtotal
+            tax_total += item.tax_amount
+            receipt_items.append(ReceiptItemResponse(
+                product_name=product.name if product else "?",
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                subtotal=item.subtotal,
+                tax_amount=item.tax_amount,
+                taxes=tax_lines,
+            ))
+
+        payments_db = await self.payment_repo.get_by_sale(sale_id)
+        payments = [
+            PaymentResponse.model_validate(p).model_dump() for p in payments_db
+        ]
+
+        tenant = await self.tenant_repo.get_by_id(sale.tenant_id)
+
+        return ReceiptResponse(
+            sale_id=sale.id,
+            store_name=tenant.name if tenant else "",
+            store_slug=tenant.slug if tenant else "",
+            customer_name=sale.customer_name,
+            items=receipt_items,
+            subtotal=round(subtotal_total, 2),
+            tax_total=round(tax_total, 2),
+            total=sale.total,
+            payments=payments,
+            status=sale.status.value,
+            payment_status=sale.payment_status,
+            created_by=sale.created_by,
+            created_at=sale.created_at.isoformat() if sale.created_at else "",
+        )
+
     async def create(self, data: SaleCreate, user_id: int) -> SaleDetailResponse:
         if not data.items:
             raise ValidationException("La venta debe tener al menos un producto")
         if current_tenant_id.get() is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
-        customer = await self.customer_service.find_or_create(
-            data.model_dump(), user_id
-        )
+        customer_data = data.model_dump()
+        customer = None
+        if any([customer_data.get("customer_email"), customer_data.get("customer_document"), customer_data.get("customer_phone")]):
+            customer = await self.customer_service.find_or_create(
+                customer_data, user_id
+            )
 
         product_ids = [i.product_id for i in data.items]
         products_map = await self.product_repo.lock_products_for_update(product_ids)
@@ -212,6 +343,7 @@ class SaleService:
             customer_id=sale.customer_id,
             total=sale.total,
             status=sale.status,
+            payment_status=sale.payment_status,
             notes=sale.notes,
             created_by=sale.created_by,
             created_at=sale.created_at,

@@ -17,16 +17,11 @@ class TenantUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class TenantSettingsUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-
-
 class TenantResponse(BaseModel):
     id: int
     name: str
     slug: str
     is_active: bool
-    api_key: str | None = None
     logo_path: str | None = None
     created_at: datetime
     updated_at: datetime

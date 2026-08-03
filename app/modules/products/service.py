@@ -30,6 +30,9 @@ class ProductService:
     async def get_by_id(self, product_id: int) -> Product | None:
         return await self.repo.get_by_id(product_id)
 
+    async def get_by_barcode(self, barcode: str) -> Product | None:
+        return await self.repo.find_by_barcode(barcode)
+
     async def create(self, product_in: ProductCreate, user_id: int) -> Product:
         if current_tenant_id.get() is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")

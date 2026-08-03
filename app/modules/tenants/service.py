@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import secrets
-
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResponse
@@ -11,7 +9,7 @@ from app.modules.roles.repository import UserRoleRepository
 from app.modules.users.repository import UserRepository
 from app.modules.tenants.model import Tenant
 from app.modules.tenants.repository import TenantRepository
-from app.modules.tenants.schema import TenantCreate, TenantSettingsUpdate, TenantUpdate
+from app.modules.tenants.schema import TenantCreate, TenantUpdate
 
 
 class TenantService:
@@ -88,23 +86,3 @@ class TenantService:
             raise NotFoundException("Tenant no encontrado")
         await self.audit.log_delete("Tenant", tenant.id, actor_id, tenant)
         await self.repo.update(tenant, is_active=False)
-
-    async def update_settings(
-        self, tenant_id: int, data: TenantSettingsUpdate, actor_id: int
-    ) -> Tenant:
-        tenant = await self.repo.get_by_id(tenant_id)
-        if not tenant:
-            raise NotFoundException("Tenant no encontrado")
-        update_data = data.model_dump(exclude_unset=True)
-        await self.repo.update(tenant, **update_data)
-        await self.audit.log_update("Tenant", tenant.id, actor_id, update_data)
-        return tenant
-
-    async def regenerate_api_key(self, tenant_id: int, actor_id: int) -> Tenant:
-        tenant = await self.repo.get_by_id(tenant_id)
-        if not tenant:
-            raise NotFoundException("Tenant no encontrado")
-        api_key = f"t_{secrets.token_urlsafe(32)}"
-        await self.repo.update(tenant, api_key=api_key)
-        await self.audit.log_update("Tenant", tenant.id, actor_id, {"api_key": "regenerated"})
-        return tenant

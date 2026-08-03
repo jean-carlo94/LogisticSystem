@@ -12,7 +12,6 @@ class ProductState(str, enum.Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
     NO_STOCK = "NO_STOCK"
-    DISCONTINUED = "DISCONTINUED"
 
 
 class Product(Base):
