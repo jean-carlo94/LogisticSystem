@@ -88,3 +88,34 @@ async def seed_tenant_roles(tenant_id: int, db=None):
     else:
         async with _get_sessionmaker()() as session:
             await _seed(session)
+
+
+DEFAULT_PAYMENT_METHODS = ["CASH", "CARD", "TRANSFER", "WALLET", "OTHER"]
+
+
+async def seed_payment_methods(tenant_id: int, db=None):
+    from app.core.database import _get_sessionmaker
+    from app.modules.payments.model import PaymentMethod
+
+    async def _seed(session):
+        for name in DEFAULT_PAYMENT_METHODS:
+            existing = await session.scalar(
+                select(PaymentMethod).where(
+                    PaymentMethod._name == name,
+                    PaymentMethod.tenant_id == tenant_id,
+                )
+            )
+            if not existing:
+                session.add(PaymentMethod(
+                    name=name,
+                    tenant_id=tenant_id,
+                    is_active=True,
+                ))
+        await session.flush()
+        await session.commit()
+
+    if db is not None:
+        await _seed(db)
+    else:
+        async with _get_sessionmaker()() as session:
+            await _seed(session)

@@ -7,7 +7,7 @@ from app.modules.customers.router import router as customers_router
 from app.modules.events.router import router as events_router
 from app.modules.invoice_templates.router import template_router as invoice_templates_router, invoice_router
 from app.modules.orders.router import router as orders_router
-from app.modules.payments.router import router as payments_router
+from app.modules.payments.router import pm_router as payment_methods_router, router as payments_router
 from app.modules.products.router import router as products_router
 from app.modules.roles.router import router as roles_router
 from app.modules.sales.router import router as sales_router
@@ -34,6 +34,7 @@ router.include_router(categories_router)
 router.include_router(sales_router)
 router.include_router(orders_router)
 router.include_router(payments_router)
+router.include_router(payment_methods_router)
 router.include_router(cash_register_router)
 router.include_router(registers_router)
 router.include_router(stations_router)

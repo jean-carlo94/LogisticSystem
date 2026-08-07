@@ -4,7 +4,7 @@ from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResponse
 from app.core.security import hash_password
-from app.core.seed import seed_tenant_roles
+from app.core.seed import seed_payment_methods, seed_tenant_roles
 from app.modules.roles.repository import UserRoleRepository
 from app.modules.users.repository import UserRepository
 from app.modules.tenants.model import Tenant
@@ -31,6 +31,8 @@ class TenantService:
         tenant = await self.repo.create(name=data.name, slug=data.slug, business_id=data.business_id)
 
         await seed_tenant_roles(tenant.id, db=self.repo.db)
+
+        await seed_payment_methods(tenant.id, db=self.repo.db)
 
         await _ensure_tenant_config(self.repo.db, tenant.id)
 

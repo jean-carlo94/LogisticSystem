@@ -62,6 +62,12 @@ class PermissionCode(str, Enum):
     PAYMENTS_VIEW = "payments_view"
     PAYMENTS_CREATE = "payments_create"
 
+    # Payment Methods
+    PAYMENT_METHODS_VIEW = "payment_methods_view"
+    PAYMENT_METHODS_CREATE = "payment_methods_create"
+    PAYMENT_METHODS_EDIT = "payment_methods_edit"
+    PAYMENT_METHODS_DELETE = "payment_methods_delete"
+
     # Users
     USERS_VIEW = "users_view"
     USERS_CREATE = "users_create"

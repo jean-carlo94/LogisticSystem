@@ -50,6 +50,11 @@
     "payments_view": "Ver pagos",
     "payments_create": "Registrar pagos",
 
+    "payment_methods_view": "Ver métodos de pago",
+    "payment_methods_create": "Crear métodos de pago",
+    "payment_methods_edit": "Editar métodos de pago",
+    "payment_methods_delete": "Eliminar métodos de pago",
+
     "users_view": "Ver usuarios",
     "users_create": "Crear usuarios",
     "users_edit": "Editar usuarios",
@@ -94,6 +99,7 @@
       "taxes_view", "taxes_create", "taxes_edit", "taxes_delete",
       "customers_view", "customers_create", "customers_edit",
       "payments_view", "payments_create",
+      "payment_methods_view", "payment_methods_create", "payment_methods_edit", "payment_methods_delete",
       "users_view", "users_create", "users_edit", "users_delete", "users_assign_roles", "users_set_pin", "users_upload_image",
       "roles_view", "roles_create", "roles_edit", "roles_delete", "roles_assign_permissions",
       "tenants_view", "tenants_create", "tenants_edit", "tenants_delete",
@@ -113,6 +119,7 @@
       "taxes_view",
       "customers_view", "customers_create",
       "payments_view", "payments_create",
+      "payment_methods_view", "payment_methods_create", "payment_methods_edit",
       "users_view",
       "roles_view",
       "api_keys_view",
@@ -130,6 +137,7 @@
       "taxes_view",
       "customers_view",
       "payments_view",
+      "payment_methods_view",
       "users_view",
       "roles_view",
       "events_view",
@@ -149,6 +157,7 @@
       "stations_view", "stations_open_close",
       "sales_view", "sales_create", "sales_cancel", "sales_view_invoice",
       "payments_view", "payments_create",
+      "payment_methods_view",
       "orders_view", "orders_change_state",
       "products_view",
       "customers_view", "customers_create"
