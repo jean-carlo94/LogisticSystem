@@ -22,6 +22,16 @@ class OrderCreate(BaseModel):
     items: list[OrderItemCreate] = Field(..., min_length=1)
 
 
+class OrderUpdate(BaseModel):
+    customer_name: str | None = Field(default=None, min_length=1, max_length=200)
+    customer_email: str | None = Field(default=None, max_length=255)
+    customer_phone: str | None = Field(default=None, max_length=30)
+    customer_document: str | None = Field(default=None, max_length=30)
+    customer_address: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=1000)
+    items: list[OrderItemCreate] | None = None
+
+
 class OrderItemResponse(BaseModel):
     id: int
     product_id: int

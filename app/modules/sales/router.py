@@ -22,7 +22,7 @@ async def list_sales(
     pag: dict = PaginationParams,
     filters: dict = FilterParams,
     service: SaleService = Depends(get_sale_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.SALES_VIEW)),
 ):
     return await service.get_all(
         page=pag["page"], size=pag["size"], filters=filters or None
@@ -45,7 +45,7 @@ async def create_sale(
 async def get_sale_detail(
     sale_id: int,
     service: SaleService = Depends(get_sale_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.SALES_VIEW)),
 ):
     return await service.get_by_id(sale_id)
 
@@ -63,6 +63,6 @@ async def cancel_sale(
 async def get_sale_receipt(
     sale_id: int,
     service: SaleService = Depends(get_sale_service),
-    user: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+    user: "User" = Depends(require_permission(PermissionCode.SALES_VIEW)),
 ):
     return await service.get_receipt(sale_id, user.id)

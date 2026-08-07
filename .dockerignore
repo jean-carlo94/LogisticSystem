@@ -25,7 +25,6 @@ static/uploads/*
 .DS_Store
 Thumbs.db
 __MACOSX/
-alembic/versions/
 migrations/
 test_*.py
 tests/

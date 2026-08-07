@@ -29,7 +29,7 @@ invoice_router = APIRouter(prefix="/sales", tags=["invoice_templates"])
 @template_router.get("/", response_model=InvoiceTemplateResponse)
 async def get_template(
     service: InvoiceTemplateService = Depends(get_invoice_template_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_VIEW)),
 ):
     return await service.get_template()
 
@@ -38,14 +38,14 @@ async def get_template(
 async def update_template(
     data: InvoiceTemplateUpdate,
     service: InvoiceTemplateService = Depends(get_invoice_template_service),
-    user: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_EDIT)),
 ):
     return await service.update_template(data, user.id)
 
 
 @template_router.get("/variables", response_model=list[TemplateVariable])
 async def get_variables(
-    _perm: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_VIEW)),
 ):
     return InvoiceTemplateService.get_variables()
 
@@ -54,7 +54,7 @@ async def get_variables(
 async def preview_template(
     body: TemplatePreviewRequest = TemplatePreviewRequest(),
     service: InvoiceTemplateService = Depends(get_invoice_template_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.INVOICE_TEMPLATES_VIEW)),
 ):
     html = await service.render_preview(body.sale_id)
     return HTMLResponse(content=html)
@@ -65,7 +65,7 @@ async def invoice_html(
     sale_id: int,
     auto_print: bool = Query(default=False, description="Activar window.print() al cargar"),
     service: InvoiceTemplateService = Depends(get_invoice_template_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.SALES_VIEW_INVOICE)),
 ):
     html = await service.render_invoice_html(sale_id, auto_print=auto_print)
     return HTMLResponse(content=html)
@@ -76,7 +76,7 @@ async def invoice_pdf(
     sale_id: int,
     regenerate: bool = Query(default=False, description="Forzar regeneración"),
     service: InvoiceTemplateService = Depends(get_invoice_template_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.SALES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.SALES_VIEW_INVOICE)),
 ):
     pdf_bytes, filename = await service.render_invoice_pdf(sale_id, regenerate=regenerate)
     return Response(

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.repository import BaseRepository
@@ -17,6 +17,15 @@ class RoleRepository(BaseRepository):
         return await self.db.scalar(stmt)
 
     async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> None:
+        await self.db.execute(
+            delete(RolePermission).where(
+                RolePermission.role_id == role_id,
+                RolePermission.permission_id.not_in(permission_ids),
+            )
+        )
+        if not permission_ids:
+            await self.db.flush()
+            return
         existing = await self.db.scalars(
             select(RolePermission.permission_id).where(
                 RolePermission.role_id == role_id,

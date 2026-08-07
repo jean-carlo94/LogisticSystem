@@ -20,7 +20,7 @@ router = APIRouter(prefix="/tenant-config", tags=["tenant_config"])
 async def get_tenant_config(
     tenant_id: int,
     service: TenantConfigService = Depends(get_tenant_config_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.TENANT_CONFIG_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.TENANT_CONFIG_VIEW)),
 ):
     return await service.get_by_tenant(tenant_id)
 
@@ -30,6 +30,6 @@ async def update_tenant_config(
     tenant_id: int,
     data: TenantConfigUpdate,
     service: TenantConfigService = Depends(get_tenant_config_service),
-    user: "User" = Depends(require_permission(PermissionCode.TENANT_CONFIG_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TENANT_CONFIG_EDIT)),
 ):
     return await service.update(tenant_id, data, user.id)

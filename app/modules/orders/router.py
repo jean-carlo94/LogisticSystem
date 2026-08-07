@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, status
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
 from app.core.security import require_cash_register, require_permission
 from app.modules.orders.deps import get_order_service
-from app.modules.orders.schema import OrderCreate, OrderDetailResponse, OrderResponse
+from app.modules.orders.schema import OrderCreate, OrderDetailResponse, OrderResponse, OrderUpdate
 from app.modules.orders.service import OrderService
 from app.core.permissions import PermissionCode
 
@@ -22,7 +22,7 @@ async def list_orders(
     pag: dict = PaginationParams,
     filters: dict = FilterParams,
     service: OrderService = Depends(get_order_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.ORDERS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.ORDERS_VIEW)),
 ):
     return await service.get_all(
         page=pag["page"], size=pag["size"], filters=filters or None
@@ -36,25 +36,34 @@ async def create_order(
     data: OrderCreate,
     service: OrderService = Depends(get_order_service),
     user: "User" = Depends(require_permission(PermissionCode.ORDERS_CREATE)),
-    cash_register_id: int | None = Depends(require_cash_register),
 ):
-    return await service.create(data, user.id, cash_register_id)
+    return await service.create(data, user.id)
 
 
 @router.get("/{order_id}", response_model=OrderDetailResponse)
 async def get_order_detail(
     order_id: int,
     service: OrderService = Depends(get_order_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.ORDERS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.ORDERS_VIEW)),
 ):
     return await service.get_by_id(order_id)
+
+
+@router.put("/{order_id}", response_model=OrderDetailResponse)
+async def update_order(
+    order_id: int,
+    data: OrderUpdate,
+    service: OrderService = Depends(get_order_service),
+    user = Depends(require_permission(PermissionCode.ORDERS_EDIT)),
+):
+    return await service.update(order_id, data, user.id)
 
 
 @router.post("/{order_id}/prepare", response_model=OrderDetailResponse)
 async def prepare_order(
     order_id: int,
     service: OrderService = Depends(get_order_service),
-    user: "User" = Depends(require_permission(PermissionCode.ORDERS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.ORDERS_CHANGE_STATE)),
 ):
     return await service.transition(order_id, user.id)
 
@@ -63,7 +72,7 @@ async def prepare_order(
 async def ready_order(
     order_id: int,
     service: OrderService = Depends(get_order_service),
-    user: "User" = Depends(require_permission(PermissionCode.ORDERS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.ORDERS_CHANGE_STATE)),
 ):
     return await service.transition(order_id, user.id)
 
@@ -72,7 +81,7 @@ async def ready_order(
 async def deliver_order(
     order_id: int,
     service: OrderService = Depends(get_order_service),
-    user: "User" = Depends(require_permission(PermissionCode.ORDERS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.ORDERS_CHANGE_STATE)),
     cash_register_id: int | None = Depends(require_cash_register),
 ):
     return await service.deliver(order_id, user.id, cash_register_id)

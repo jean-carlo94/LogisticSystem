@@ -21,7 +21,7 @@ from app.modules.tenants.model import Tenant
 from app.modules.taxes.model import ProductTax, Tax
 from app.modules.customers.model import Customer
 from app.modules.payments.model import Payment
-from app.modules.cash_register.model import CashRegisterSession
+from app.modules.cash_register.model import CashRegister, CashRegisterSession
 from app.modules.stations.model import Station, StationSession, StationSessionItem
 from app.modules.tenant_config.model import TenantConfig
 from app.modules.api_keys.model import ApiKey

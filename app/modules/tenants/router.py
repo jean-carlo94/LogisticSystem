@@ -22,7 +22,7 @@ async def list_tenants(
     slug: str | None = Query(default=None, description="Slug del tenant"),
     filters: dict = FilterParams,
     service: TenantService = Depends(get_tenant_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
+    _perm: "User" = Depends(require_permission(PermissionCode.TENANTS_VIEW)),
 ):
     merged = dict(filters)
     if name is not None:
@@ -40,7 +40,7 @@ async def list_tenants(
 async def create_tenant(
     data: TenantCreate,
     service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TENANTS_CREATE)),
 ):
     return await service.create(data, user.id)
 
@@ -49,7 +49,7 @@ async def create_tenant(
 async def get_tenant(
     tenant_id: int,
     service: TenantService = Depends(get_tenant_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
+    _perm: "User" = Depends(require_permission(PermissionCode.TENANTS_VIEW)),
 ):
     return await service.get_by_id(tenant_id)
 
@@ -59,7 +59,7 @@ async def update_tenant(
     tenant_id: int,
     data: TenantUpdate,
     service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TENANTS_EDIT)),
 ):
     return await service.update(tenant_id, data, user.id)
 
@@ -68,6 +68,6 @@ async def update_tenant(
 async def delete_tenant(
     tenant_id: int,
     service: TenantService = Depends(get_tenant_service),
-    user: "User" = Depends(require_permission(PermissionCode.TENANTS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TENANTS_DELETE)),
 ):
     await service.delete(tenant_id, user.id)

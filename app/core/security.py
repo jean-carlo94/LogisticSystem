@@ -153,10 +153,6 @@ def hash_api_key(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
-def verify_api_key(raw_key: str, hashed_key: str) -> bool:
-    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest() == hashed_key
-
-
 async def get_current_api_key(
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     db: AsyncSession = Depends(get_db),
@@ -184,18 +180,6 @@ async def get_current_api_key(
     await db.commit()
 
     return key
-
-
-class ApiKeyPermissionChecker:
-    def __init__(self, permission_code: PermissionCode):
-        self.permission_code = permission_code
-
-    async def __call__(self, api_key = Depends(get_current_api_key)) -> "ApiKey":
-        if self.permission_code.value not in (api_key.permissions or []):
-            raise ForbiddenException(
-                f"API Key no tiene permiso: {self.permission_code.value}"
-            )
-        return api_key
 
 
 def require_module(module_name: str):

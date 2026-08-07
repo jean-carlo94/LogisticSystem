@@ -62,6 +62,19 @@ class UserRepository(BaseRepository):
             self.db.add(ur)
             await self.db.flush()
 
+    async def remove_role(self, user_id: int, role_id: int) -> None:
+        from app.modules.roles.model import UserRole
+
+        ur = await self.db.scalar(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id,
+            )
+        )
+        if ur:
+            await self.db.delete(ur)
+            await self.db.flush()
+
     async def role_exists(self, role_id: int) -> bool:
         from app.modules.roles.model import Role
         role = await self.db.get(Role, role_id)

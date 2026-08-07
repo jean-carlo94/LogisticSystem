@@ -170,7 +170,7 @@ class StationService:
         return await self._build_session_response(session, [])
 
     async def close_session(
-        self, station_id: int, user_id: int
+        self, station_id: int, user_id: int, cash_register_id: int | None = None,
     ) -> StationSessionResponse:
         session = await self.session_repo.get_active_by_station(station_id)
         if not session:
@@ -200,7 +200,7 @@ class StationService:
 
             prev_tenant = current_tenant_id.get()
             sale_detail = await self.sale_service.create(
-                sale_data, user_id, session.cash_register_id
+                sale_data, user_id, cash_register_id
             )
             current_tenant_id.set(prev_tenant)
 

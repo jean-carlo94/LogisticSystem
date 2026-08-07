@@ -15,6 +15,8 @@ def _get_async_engine():
         _async_engine = create_async_engine(
             settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
             echo=False,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
         )
     return _async_engine
 

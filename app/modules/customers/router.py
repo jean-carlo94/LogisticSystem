@@ -24,7 +24,7 @@ async def list_customers(
     document: str | None = Query(default=None, description="Documento del cliente"),
     filters: dict = FilterParams,
     service: CustomerService = Depends(get_customer_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_VIEW)),
 ):
     merged = dict(filters)
     if email is not None:
@@ -38,7 +38,7 @@ async def list_customers(
 async def create_customer(
     data: CustomerCreate,
     service: CustomerService = Depends(get_customer_service),
-    user: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_CREATE)),
 ):
     return await service.create(data, user.id)
 
@@ -47,7 +47,7 @@ async def create_customer(
 async def get_customer(
     customer_id: int,
     service: CustomerService = Depends(get_customer_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_VIEW)),
 ):
     return await service.get_by_id(customer_id)
 
@@ -57,6 +57,6 @@ async def update_customer(
     customer_id: int,
     data: CustomerUpdate,
     service: CustomerService = Depends(get_customer_service),
-    user: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.CUSTOMERS_EDIT)),
 ):
     return await service.update(customer_id, data, user.id)

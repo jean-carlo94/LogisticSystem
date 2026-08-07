@@ -27,7 +27,7 @@ async def list_stations(
     code: str | None = Query(default=None, description="Código único"),
     filters: dict = FilterParams,
     service: StationService = Depends(get_station_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.STATIONS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.STATIONS_VIEW)),
 ):
     merged = dict(filters)
     if code is not None:
@@ -43,7 +43,7 @@ async def list_stations(
 async def create_station(
     data: StationCreate,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_CREATE)),
 ):
     return await service.create(data, user.id)
 
@@ -52,7 +52,7 @@ async def create_station(
 async def get_station(
     station_id: int,
     service: StationService = Depends(get_station_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.STATIONS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.STATIONS_VIEW)),
 ):
     return await service.get_by_id(station_id)
 
@@ -62,7 +62,7 @@ async def update_station(
     station_id: int,
     data: StationUpdate,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_EDIT)),
 ):
     return await service.update(station_id, data, user.id)
 
@@ -71,7 +71,7 @@ async def update_station(
 async def delete_station(
     station_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_DELETE)),
 ):
     await service.delete(station_id, user.id)
 
@@ -85,26 +85,26 @@ async def open_session(
     station_id: int,
     data: SessionOpenRequest = SessionOpenRequest(),
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
-    cash_register_id: int | None = Depends(require_cash_register),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_OPEN_CLOSE)),
 ):
-    return await service.open_session(station_id, data, user.id, cash_register_id)
+    return await service.open_session(station_id, data, user.id)
 
 
 @router.post("/{station_id}/close", response_model=StationSessionResponse)
 async def close_session(
     station_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_OPEN_CLOSE)),
+    cash_register_id: int | None = Depends(require_cash_register),
 ):
-    return await service.close_session(station_id, user.id)
+    return await service.close_session(station_id, user.id, cash_register_id)
 
 
 @router.post("/{station_id}/cancel", response_model=StationSessionResponse)
 async def cancel_session(
     station_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_OPEN_CLOSE)),
 ):
     return await service.cancel_session(station_id, user.id)
 
@@ -113,7 +113,7 @@ async def cancel_session(
 async def get_session_items(
     station_id: int,
     service: StationService = Depends(get_station_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.STATIONS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.STATIONS_VIEW)),
 ):
     return await service.get_session_items(station_id)
 
@@ -127,7 +127,7 @@ async def add_items(
     station_id: int,
     data: SessionItemsCreate,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE_ITEMS)),
 ):
     return await service.add_items(station_id, data, user.id)
 
@@ -141,7 +141,7 @@ async def update_item(
     item_id: int,
     data: SessionItemUpdate,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE_ITEMS)),
 ):
     return await service.update_item(station_id, item_id, data, user.id)
 
@@ -154,7 +154,7 @@ async def cancel_item(
     station_id: int,
     item_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE_ITEMS)),
 ):
     await service.cancel_item(station_id, item_id, user.id)
 
@@ -167,7 +167,7 @@ async def prepare_item(
     station_id: int,
     item_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE_ITEMS)),
 ):
     return await service.transition_item(station_id, item_id, user.id)
 
@@ -180,7 +180,7 @@ async def ready_item(
     station_id: int,
     item_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE_ITEMS)),
 ):
     return await service.transition_item(station_id, item_id, user.id)
 
@@ -193,7 +193,7 @@ async def deliver_item(
     station_id: int,
     item_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE_ITEMS)),
 ):
     return await service.transition_item(station_id, item_id, user.id)
 
@@ -206,6 +206,6 @@ async def transfer_session(
     station_id: int,
     target_id: int,
     service: StationService = Depends(get_station_service),
-    user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.STATIONS_OPEN_CLOSE)),
 ):
     return await service.transfer_session(station_id, target_id, user.id)

@@ -3,14 +3,13 @@ import secrets
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
-from app.core.security import hash_api_key, verify_api_key
+from app.core.security import hash_api_key
 from app.core.tenant import current_tenant_id
 from app.modules.api_keys.model import ApiKey
 from app.modules.api_keys.repository import ApiKeyRepository
 from app.modules.api_keys.schema import (
     ApiKeyCreate, ApiKeyCreatedResponse, ApiKeyUpdate, ApiKeyResponse,
 )
-from app.modules.tenants.repository import TenantRepository
 
 
 class ApiKeyService:
@@ -88,13 +87,3 @@ class ApiKeyService:
             raise NotFoundException("API Key no encontrada")
         await self.audit.log_delete("ApiKey", key.id, user_id, key)
         await self.repo.delete(key)
-
-    async def authenticate(self, raw_key: str) -> ApiKey | None:
-        key_hash = hash_api_key(raw_key)
-        key = await self.repo.find_by_hash(key_hash)
-        if not key or not key.is_active:
-            return None
-        from datetime import datetime, timezone
-        if key.expires_at and key.expires_at < datetime.now(timezone.utc):
-            return None
-        return key

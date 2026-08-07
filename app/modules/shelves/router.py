@@ -27,7 +27,7 @@ async def list_shelves(
     code: str | None = Query(default=None, description="Código de estantería (único)"),
     filters: dict = FilterParams,
     service: ShelfService = Depends(get_shelf_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.SHELVES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.SHELVES_VIEW)),
 ) -> PaginatedResponse[ShelfResponse]:
     merged = dict(filters)
     if code is not None:
@@ -39,7 +39,7 @@ async def list_shelves(
 async def retrieve_shelf(
     shelf_id: int,
     service: ShelfService = Depends(get_shelf_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.SHELVES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.SHELVES_VIEW)),
 ) -> ShelfDetailResponse:
     return await service.get_detail(shelf_id)
 
@@ -58,7 +58,7 @@ async def update_shelf(
     shelf_id: int,
     data: ShelfUpdate,
     service: ShelfService = Depends(get_shelf_service),
-    user: "User" = Depends(require_permission(PermissionCode.SHELVES_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.SHELVES_EDIT)),
 ) -> ShelfResponse:
     return await service.update(shelf_id, data, user.id)
 
@@ -81,7 +81,7 @@ async def add_item_to_shelf(
     shelf_id: int,
     data: ShelfItemCreate,
     service: ShelfService = Depends(get_shelf_service),
-    user: "User" = Depends(require_permission(PermissionCode.SHELVES_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.SHELVES_ASSIGN_PRODUCTS)),
 ) -> ShelfItemResponse:
     return await service.add_item(shelf_id, data, user.id)
 
@@ -92,7 +92,7 @@ async def update_item_quantity(
     item_id: int,
     data: ShelfItemUpdate,
     service: ShelfService = Depends(get_shelf_service),
-    user: "User" = Depends(require_permission(PermissionCode.SHELVES_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.SHELVES_ASSIGN_PRODUCTS)),
 ):
     result = await service.update_item(shelf_id, item_id, data, user.id)
     if result is None:
@@ -105,6 +105,6 @@ async def remove_item_from_shelf(
     shelf_id: int,
     item_id: int,
     service: ShelfService = Depends(get_shelf_service),
-    user: "User" = Depends(require_permission(PermissionCode.SHELVES_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.SHELVES_ASSIGN_PRODUCTS)),
 ) -> None:
     await service.remove_item(shelf_id, item_id, user.id)

@@ -1,14 +1,13 @@
-from sqlalchemy import text as sa_text
+from sqlalchemy import select, text as sa_text
 
 from app.core.repository import BaseRepository
-from app.modules.cash_register.model import CashRegisterSession, CashRegisterStatus
+from app.modules.cash_register.model import CashRegister, CashRegisterSession, CashRegisterStatus
 
 
 class CashRegisterRepository(BaseRepository):
     model = CashRegisterSession
 
     async def get_current(self, tenant_id: int, user_id: int) -> CashRegisterSession | None:
-        from sqlalchemy import select
         result = await self.db.scalar(
             select(CashRegisterSession).where(
                 CashRegisterSession.tenant_id == tenant_id,
@@ -19,10 +18,18 @@ class CashRegisterRepository(BaseRepository):
         return result
 
     async def get_open_for_user(self, user_id: int) -> CashRegisterSession | None:
-        from sqlalchemy import select
         result = await self.db.scalar(
             select(CashRegisterSession).where(
                 CashRegisterSession.user_id == user_id,
+                CashRegisterSession.status == CashRegisterStatus.OPEN,
+            )
+        )
+        return result
+
+    async def get_open_by_register(self, cash_register_id: int) -> CashRegisterSession | None:
+        result = await self.db.scalar(
+            select(CashRegisterSession).where(
+                CashRegisterSession.cash_register_id == cash_register_id,
                 CashRegisterSession.status == CashRegisterStatus.OPEN,
             )
         )
@@ -41,3 +48,7 @@ class CashRegisterRepository(BaseRepository):
             ).bindparams(tid=tenant_id, since=since),
         )
         return float(result)
+
+
+class CashRegisterCRUDRepository(BaseRepository):
+    model = CashRegister

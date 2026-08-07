@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     ADMIN_EMAIL: str = ""
     ADMIN_PASSWORD: str = ""
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
     PDF_RENDERER: str = "weasyprint"
     PDF_SERVICE_URL: str = ""
     PDF_CONCURRENCY_LIMIT: int = 5

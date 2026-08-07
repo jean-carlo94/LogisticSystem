@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.modules.api_keys.router import router as api_keys_router
-from app.modules.cash_register.router import router as cash_register_router
+from app.modules.cash_register.router import router as cash_register_router, registers_router
 from app.modules.categories.router import router as categories_router
 from app.modules.customers.router import router as customers_router
 from app.modules.events.router import router as events_router
@@ -35,6 +35,7 @@ router.include_router(sales_router)
 router.include_router(orders_router)
 router.include_router(payments_router)
 router.include_router(cash_register_router)
+router.include_router(registers_router)
 router.include_router(stations_router)
 router.include_router(invoice_templates_router)
 router.include_router(invoice_router)

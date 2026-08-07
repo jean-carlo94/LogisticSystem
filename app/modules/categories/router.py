@@ -23,7 +23,7 @@ async def list_categories(
     name: str | None = Query(default=None, description="Nombre de la categoría"),
     filters: dict = FilterParams,
     service: CategoryService = Depends(get_category_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.CATEGORIES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.CATEGORIES_VIEW)),
 ):
     merged = dict(filters)
     if name is not None:
@@ -49,7 +49,7 @@ async def update_category(
     category_id: int,
     data: CategoryUpdate,
     service: CategoryService = Depends(get_category_service),
-    user: "User" = Depends(require_permission(PermissionCode.CATEGORIES_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.CATEGORIES_EDIT)),
 ):
     return await service.update(category_id, data, user.id)
 

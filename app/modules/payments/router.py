@@ -22,7 +22,7 @@ async def list_payments(
     pag: dict = PaginationParams,
     filters: dict = FilterParams,
     service: PaymentService = Depends(get_payment_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PAYMENTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PAYMENTS_VIEW)),
 ):
     return await service.get_all(
         page=pag["page"], size=pag["size"], filters=filters or None
@@ -35,7 +35,7 @@ async def list_payments(
 async def create_payment(
     data: PaymentCreate,
     service: PaymentService = Depends(get_payment_service),
-    user: "User" = Depends(require_permission(PermissionCode.PAYMENTS_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.PAYMENTS_CREATE)),
 ):
     return await service.create(data, user.id)
 
@@ -44,6 +44,6 @@ async def create_payment(
 async def get_payments_by_sale(
     sale_id: int,
     service: PaymentService = Depends(get_payment_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PAYMENTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PAYMENTS_VIEW)),
 ):
     return await service.get_by_sale(sale_id)

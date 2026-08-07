@@ -27,7 +27,7 @@ async def list_products(
     barcode: str | None = Query(default=None, description="Código de barras (único)"),
     filters: dict = FilterParams,
     service: ProductService = Depends(get_product_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_VIEW)),
 ) -> PaginatedResponse[ProductResponse]:
     merged = dict(filters)
     if barcode is not None:
@@ -39,7 +39,7 @@ async def list_products(
 async def get_product_by_barcode(
     barcode: str,
     service: ProductService = Depends(get_product_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_VIEW)),
 ) -> ProductResponse:
     product = await service.get_by_barcode(barcode)
     if not product:
@@ -51,7 +51,7 @@ async def get_product_by_barcode(
 async def retrieve_product(
     product_id: int,
     service: ProductService = Depends(get_product_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_VIEW)),
 ) -> ProductResponse:
     product = await service.get_by_id(product_id)
     if not product:
@@ -73,7 +73,7 @@ async def update_product(
     product_id: int,
     product_in: ProductUpdate,
     service: ProductService = Depends(get_product_service),
-    user: "User" = Depends(require_permission(PermissionCode.PRODUCTS_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.PRODUCTS_EDIT)),
 ) -> ProductResponse:
     return await service.update(product_id, product_in, user.id)
 
@@ -92,7 +92,7 @@ async def upload_product_image(
     product_id: int,
     file: UploadFile = File(...),
     service: ProductService = Depends(get_product_service),
-    user: "User" = Depends(require_permission(PermissionCode.PRODUCTS_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.PRODUCTS_UPLOAD_IMAGE)),
 ) -> ProductResponse:
     return await service.upload_image(product_id, file, user.id)
 
@@ -101,7 +101,7 @@ async def upload_product_image(
 async def delete_product_image(
     product_id: int,
     service: ProductService = Depends(get_product_service),
-    user: "User" = Depends(require_permission(PermissionCode.PRODUCTS_UPDATE)),
+    user: "User" = Depends(require_permission(PermissionCode.PRODUCTS_UPLOAD_IMAGE)),
 ) -> None:
     await service.delete_image(product_id, user.id)
 
@@ -110,7 +110,7 @@ async def delete_product_image(
 async def get_product_qr(
     product_id: int,
     service: ProductService = Depends(get_product_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_VIEW)),
 ) -> ProductQRResponse:
     return await service.get_qr_data(product_id)
 
@@ -122,6 +122,6 @@ async def get_product_qr(
 async def get_product_locations(
     product_id: int,
     service: ProductService = Depends(get_product_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.PRODUCTS_VIEW)),
 ) -> list[ProductLocationResponse]:
     return await service.get_locations(product_id)

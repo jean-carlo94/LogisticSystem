@@ -142,7 +142,7 @@ async def pin_login(
 async def create_user(
     data: UserCreate,
     service: UserService = Depends(get_user_service),
-    actor: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    actor: User = Depends(require_permission(PermissionCode.USERS_CREATE)),
 ):
     return await service.create_user(data, actor.id)
 
@@ -153,7 +153,7 @@ async def list_users(
     email: str | None = Query(default=None, description="Email (único)"),
     filters: dict = FilterParams,
     service: UserService = Depends(get_user_service),
-    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_VIEW)),
 ):
     merged = dict(filters)
     if email is not None:
@@ -165,7 +165,7 @@ async def list_users(
 async def retrieve_user(
     user_id: int,
     service: UserService = Depends(get_user_service),
-    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_VIEW)),
 ):
     return await service.get_by_id(user_id)
 
@@ -175,7 +175,7 @@ async def update_user(
     user_id: int,
     data: UserUpdate,
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    admin: User = Depends(require_permission(PermissionCode.USERS_EDIT)),
 ):
     return await service.update(user_id, data, admin)
 
@@ -184,7 +184,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    admin: User = Depends(require_permission(PermissionCode.USERS_DELETE)),
 ):
     await service.delete(user_id, admin)
 
@@ -193,7 +193,7 @@ async def delete_user(
 async def get_user_roles(
     user_id: int,
     service: UserService = Depends(get_user_service),
-    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_VIEW)),
 ):
     return await service.get_user_roles(user_id)
 
@@ -203,9 +203,19 @@ async def assign_role_to_user(
     user_id: int,
     data: UserAssignRole,
     service: UserService = Depends(get_user_service),
-    _perm: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_ASSIGN_ROLES)),
 ):
     await service.assign_role(user_id, data.role_id)
+
+
+@users_router.delete("/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_role_from_user(
+    user_id: int,
+    role_id: int,
+    service: UserService = Depends(get_user_service),
+    _perm: User = Depends(require_permission(PermissionCode.USERS_ASSIGN_ROLES)),
+):
+    await service.remove_role(user_id, role_id)
 
 
 @users_router.post("/{user_id}/image", response_model=UserAdminResponse)
@@ -213,7 +223,7 @@ async def upload_user_image(
     user_id: int,
     file: UploadFile = File(...),
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    admin: User = Depends(require_permission(PermissionCode.USERS_UPLOAD_IMAGE)),
 ):
     return await service.upload_image(user_id, file, admin.id)
 
@@ -222,7 +232,7 @@ async def upload_user_image(
 async def delete_user_image(
     user_id: int,
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    admin: User = Depends(require_permission(PermissionCode.USERS_UPLOAD_IMAGE)),
 ):
     await service.delete_image(user_id, admin.id)
 
@@ -232,6 +242,6 @@ async def set_user_pin(
     user_id: int,
     data: PinSetRequest,
     service: UserService = Depends(get_user_service),
-    admin: User = Depends(require_permission(PermissionCode.USERS_MANAGE)),
+    admin: User = Depends(require_permission(PermissionCode.USERS_SET_PIN)),
 ):
     await service.set_pin(user_id, data.pin, admin.id)

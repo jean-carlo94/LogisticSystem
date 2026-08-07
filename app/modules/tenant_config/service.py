@@ -48,21 +48,3 @@ class TenantConfigService:
             )
 
         return config
-
-    async def ensure_config(self, tenant_id: int) -> None:
-        existing = await self.repo.get_by_tenant(tenant_id)
-        if not existing:
-            await self.repo.create(
-                tenant_id=tenant_id,
-                modules_enabled=list(DEFAULT_MODULES),
-            )
-
-    @staticmethod
-    async def is_module_enabled(db, tenant_id: int, module_name: str) -> bool:
-        from sqlalchemy import select
-        config = await db.scalar(
-            select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
-        )
-        if not config:
-            return True
-        return module_name in (config.modules_enabled or [])

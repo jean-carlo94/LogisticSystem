@@ -7,8 +7,7 @@ from app.core.exceptions import ConflictException, NotFoundException, Validation
 from app.core.pagination import PaginatedResponse
 from app.core.storage import generate_filename, get_storage
 from app.core.tenant import current_tenant_id
-from app.modules.products.model import ProductState
-from app.modules.products.model import Product
+from app.modules.products.model import Product, ProductState
 from app.modules.products.repository import ProductRepository
 from app.modules.products.schema import (
     ProductCreate, ProductLocationResponse, ProductQRResponse, ProductUpdate, ShelfInfo,

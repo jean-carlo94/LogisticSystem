@@ -36,8 +36,9 @@ app/
 │   ├── seed.py               # Permisos globales + admin default + seed_tenant_roles()
 │   ├── tenant.py             # ContextVar current_tenant_id + resolve_tenant()
 │   ├── email.py              # Envío de emails (Resend/SMTP)
-│   ├── templates.py          # Templates Jinja2 para emails
-│   └── rate_limit.py         # Rate limiter in-memory
+│   ├── templates.py          # Templates Jinja2 (emails + render from string + SandboxedEnvironment)
+│   ├── pdf.py                # PDFRenderer ABC + Gotenberg + WeasyPrint + Custom (semáforo de concurrencia)
+│   ├── rate_limit.py         # Rate limiter in-memory
 ├── api/
 │   ├── dependencies.py       # get_audit_logger (dependencias compartidas)
 │   └── v1/api.py             # Registro de routers
@@ -50,14 +51,15 @@ app/
     ├── shelves/              # CRUD estanterías + items + validación capacidad
     ├── categories/           # CRUD categorías por tenant + asignación a productos
     ├── sales/                # Crear ventas, descuento de stock producto + estantería
-    ├── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
+    ├── orders/               # Pedidos con state machine + edición pre-DELIVERED + entrega crea venta
     ├── payments/             # Registro de pagos (cash/card/transfer/wallet) + split payments
     ├── taxes/                # CRUD impuestos por tenant + asignación a productos (ProductTax)
     ├── customers/            # CRUD clientes por tenant + auto-detección en ventas/pedidos
     ├── cash_register/        # Caja registradora multi-caja: 1 por usuario, N simultáneas
     ├── stations/             # Puntos de servicio: mesas/bar/hotel/delivery/mostrador
     ├── tenant_config/        # Config de módulos habilitados por tenant
-    └── api_keys/             # API Keys para integraciones externas (SHA-256, permisos propios)
+    ├── api_keys/             # API Keys para integraciones externas (SHA-256, permisos propios)
+    └── invoice_templates/    # Plantillas HTML de factura por tenant + renderizado + PDF
 ```
 
 ### Layer chain (STRICT)
@@ -204,10 +206,11 @@ if api_key is not None:
 - **Property setters**: Model properties (e.g., `name.strip()`, `price.round(2)`, `stock.max(0)`, `weight_kg.max(0)`) auto-triggered via `Base._new()` and `Base.update()` using `setattr`. No manual `__init__` needed.
 - **Product state machine** (`app/modules/products/service.py:_resolve_state`): stock=0 → NO_STOCK, stock>0 + current NO_STOCK → ACTIVE, else leave as-is.
 - **Order state machine** (`app/modules/orders/service.py`): CREATED → PREPARING → READY → DELIVERED. Solo forward. Cada transición es un endpoint separado (`POST /orders/{id}/prepare`, `/ready`, `/deliver`). Al hacer `deliver`, `OrderService` crea automáticamente una venta via `SaleService.create()`. `SaleService` se inyecta en `OrderService` vía `deps.py` (excepción intencional a la regla de no acoplar servicios).
+- **Order edit**: `PUT /orders/{id}` permite editar campos del cliente, notas e items antes de `DELIVERED`. Partial update: solo los campos enviados se modifican. Si se envía `items`, reemplaza todos los items existentes (valida stock de nuevo). `_validate_items()` es compartido entre `create()` y `update()` para evitar duplicación de lógica de validación.
 - **Orders shelf optional**: `OrderItem.shelf_id` es nullable. Si se especifica, valida que el producto esté asignado a esa estantería y con stock suficiente. Si no, solo valida producto + stock general. Al entregar, la venta resultante respeta el `shelf_id` (o lo omite) del pedido original.
 - **Events append-only**: GET only. Written via `AuditLogger` inside services. Generic: `entity_type + entity_id + user_id + action`.
 - **Audit logging**: `AuditLogger` (`app/core/audit.py`) serializes Pydantic schemas, SQLAlchemy entities (via `class_mapper`), dicts. Filters `hashed_password`. Injected via `Depends(get_audit_logger)`.
-- **RBAC**: `PermissionCode` enum in `app/core/permissions.py`. `require_permission(code)` dependency in routes. `is_super_admin=True` bypasses all checks. API Keys verifican contra `key.permissions`. Seed in `app/seed.json`. Permisos nuevos: `api_keys_read`, `api_keys_manage`, `tenant_config_read`, `tenant_config_manage`.
+- **RBAC**: `PermissionCode` enum en `app/core/permissions.py` con convención `{modulo}_{accion}`. Acciones: `view`, `create`, `edit`, `delete` + específicas por módulo (`open_close`, `manage_items`, `change_state`, `assign_roles`, `assign_permissions`, `upload_image`, `set_pin`, `cancel`, `view_invoice`, `assign_products`, `manage_registers`). `require_permission(code)` dependency en routes. `is_super_admin=True` bypasses all checks. API Keys verifican contra `key.permissions`. Seed en `app/seed.json`. 65 permisos totales. Roles predefinidos: Admin, Operator, Viewer, Waiter, Cashier.
 - **Transactions**: `get_db` commits on success, rolls back on exception. `Base` methods use `flush` (not commit). Request-scoped atomicity.
 - **Async**: `AsyncSession` + `async def` en todas las capas (router, service, repository, Base).
 - **Pagination**: `PaginationParams = Depends(get_pagination)` for query params. Return type `PaginatedResponse[T]`.
@@ -233,11 +236,11 @@ Schema compartido (misma DB) con columna `tenant_id` en tablas de negocio. Aisla
 ### Modelo de datos
 
 **Tablas con `tenant_id`:**
-`users` (nullable, null = platform admin), `products`, `categories`, `shelves`, `sales`, `orders`, `events` (nullable), `roles`, `tenant_configs` (UNIQUE), `api_keys`.
+`users` (nullable, null = platform admin), `products`, `categories`, `shelves`, `sales`, `orders`, `events` (nullable), `roles`, `tenant_configs` (UNIQUE), `api_keys`, `invoice_templates` (UNIQUE).
 
 **Sin `tenant_id`** (scoped via FK padre): `shelf_items`, `sale_items`, `order_items`, `product_categories`, `role_permissions`, `user_roles`, `permissions` (global).
 
-**Unique constraints compuestos:** `(tenant_id, barcode)` en products, `(tenant_id, code)` en shelves, `(tenant_id, name)` en categories y roles. `email` se mantiene unique global. `Tenant.business_id` (String 50, nullable, indexado) acepta cualquier identificador fiscal con caracteres especiales.
+**Unique constraints compuestos:** `(tenant_id, barcode)` en products, `(tenant_id, code)` en shelves, `(tenant_id, name)` en categories y roles. `invoice_templates` tiene `tenant_id` UNIQUE. `email` se mantiene unique global. `Tenant.business_id` (String 50, nullable, indexado) acepta cualquier identificador fiscal con caracteres especiales.
 
 ### Tenant context (ContextVar)
 
@@ -277,7 +280,10 @@ current_tenant_id: ContextVar[int | None] = ContextVar("current_tenant_id", defa
 
 ### PermissionCode
 
-`TENANTS_MANAGE = "tenants_manage"` — solo platform admin (`is_super_admin=True`). Roles por tenant NO incluyen este permiso.
+`PermissionCode` enum en `app/core/permissions.py`. Convención: `{modulo}_{accion}`. 65 permisos en total:
+- **Base**: `view`, `create`, `edit`, `delete`
+- **Especiales**: `upload_image`, `assign_products`, `open_close`, `manage_items`, `change_state`, `cancel`, `view_invoice`, `assign_roles`, `set_pin`, `assign_permissions`, `manage_registers`
+- **Gate de módulo**: si el usuario no tiene NINGÚN permiso de un módulo, el frontend no muestra el módulo.
 
 ### FORBIDDEN / ALLOWED patterns
 
@@ -481,11 +487,97 @@ class ShelfDetailResponse(ShelfResponse):
 ## Seed + admin default
 
 `app/core/seed.py` crea al primer arranque:
-- Permisos globales desde `seed.json` (idempotente, solo si tabla `permissions` vacía). 35 permisos: `products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`, `categories_create`, `categories_read`, `categories_update`, `categories_delete`, `sales_create`, `sales_read`, `sales_cancel`, `orders_create`, `orders_read`, `orders_manage`, `tenants_manage`, `taxes_read`, `taxes_manage`, `customers_read`, `customers_manage`, `payments_read`, `payments_manage`, `stations_read`, `stations_manage`, `cash_register_read`, `cash_register_manage`, `api_keys_read`, `api_keys_manage`, `tenant_config_read`, `tenant_config_manage`.
+- Permisos globales desde `seed.json` (idempotente, solo si tabla `permissions` vacía). 65 permisos bajo convención `{modulo}_{accion}`.
 - Admin default con `ADMIN_EMAIL`/`ADMIN_PASSWORD` (usa fallback `admin@alunatechnologies.com` / `admin123`). `is_super_admin=True`, sin `tenant_id`.
 - Los roles (Admin/Operator/Viewer) NO se crean globalmente — se crean por tenant via `seed_tenant_roles(tenant_id)` al llamar `POST /tenants`.
 - TenantConfig se crea automáticamente al crear tenant con todos los módulos habilitados. `GET /tenant-config/{id}` también hace lazy-create si no existe.
-- Admin/Operator/Viewer incluyen permisos `api_keys_read/manage` y `tenant_config_read/manage` (ver `seed.json`).
+- InvoiceTemplate se crea automáticamente al primer `GET /invoice-templates` (lazy-create con template default).
+- Admin/Operator/Viewer incluyen permisos `api_keys_read/manage`, `tenant_config_read/manage`, `invoice_templates_read/manage` (ver `seed.json`).
+
+## Invoice Templates (facturas HTML/PDF)
+
+`app/modules/invoice_templates/` — plantillas HTML editables por tenant para facturas. Renderizado con Jinja2 sandboxed. PDF vía servicio externo o local.
+
+### Modelo de datos
+
+Tabla `invoice_templates`: `tenant_id` UNIQUE FK, `html_content` TEXT. Una plantilla por tenant. Lazy-create al primer `GET` (template default incluido en `default_template.py`).
+
+### Template variables
+
+Disponibles en el HTML via `{{ variable }}`:
+
+| Categoría | Variables |
+|-----------|-----------|
+| **tenant** | `tenant_name`, `tenant_slug`, `tenant_business_id`, `tenant_logo_url` |
+| **sale** | `invoice_number`, `invoice_date`, `invoice_date_short`, `status`, `payment_status`, `notes`, `subtotal`, `tax_total`, `total` |
+| **customer** | `customer_name`, `customer_document`, `customer_email`, `customer_phone`, `customer_address` |
+| **items** | `{% for item in items %}` loop con `item.product_name`, `item.quantity`, `item.unit_price`, `item.subtotal`, `item.tax_amount` |
+| **payments** | `{% for payment in payments %}` loop con `payment.method`, `payment.amount`, `payment.reference` |
+| **meta** | `auto_print` — `true` si se activa `window.print()` al cargar |
+
+### Default template
+
+HTML base con CSS `@media print` + `@media screen`, botón "Imprimir", tabla de items con subtotales/impuestos, cabecera con datos del negocio (logo opcional), footer con totales y métodos de pago. Incluido como `DEFAULT_INVOICE_TEMPLATE` en `default_template.py`.
+
+### Seguridad
+
+`render_template_string()` usa `jinja2.SandboxedEnvironment` — bloquea `__import__`, `eval`, acceso al sistema. `validate_template_syntax()` valida al guardar (no al renderizar).
+
+### Endpoints
+
+Dos routers registrados en `api/v1/api.py`:
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/invoice-templates/` | `invoice_templates_read` | HTML actual del tenant |
+| `PUT` | `/invoice-templates/` | `invoice_templates_manage` | Guardar HTML editado (valida sintaxis) |
+| `GET` | `/invoice-templates/variables` | `invoice_templates_read` | Lista de variables disponibles |
+| `POST` | `/invoice-templates/preview` | `invoice_templates_read` | Renderizar con datos dummy o reales |
+| `GET` | `/sales/{id}/invoice/html` | `sales_read` | HTML renderizado de una venta (`?auto_print=true`) |
+| `GET` | `/sales/{id}/invoice/pdf` | `sales_read` | PDF con caché (`?regenerate=1`) |
+
+### Cache de PDF
+
+`Sale.invoice_pdf_path` actúa como caché. Si existe, `GET /sales/{id}/invoice/pdf` devuelve el archivo guardado sin regenerar. `?regenerate=1` fuerza regeneración. PDFs guardados en `STORAGE_PATH/invoices/{tenant_id}/factura_{sale_id}.pdf`.
+
+## PDF Rendering (`app/core/pdf.py`)
+
+### ABC + backends
+
+```python
+class PDFRenderer(ABC):
+    async def render(html: str) -> bytes
+
+class WeasyPrintRenderer(PDFRenderer):  # local, sin dependencia externa
+class GotenbergRenderer(PDFRenderer):   # POST /forms/chromium/convert/html con semáforo
+class CustomPDFRenderer(PDFRenderer):   # POST genérico con JSON {"html": "..."}
+```
+
+Switch via env var `PDF_RENDERER=weasyprint|gotenberg|custom`. `PDF_SERVICE_URL` para backends externos.
+
+### Concurrencia
+
+`PDF_CONCURRENCY_LIMIT` (default 5) — semáforo `asyncio.Semaphore` en `GotenbergRenderer` y `CustomPDFRenderer`. Requests excedentes esperan en cola.
+
+### Config
+
+```python
+# app/core/config.py
+PDF_RENDERER: str = "weasyprint"
+PDF_SERVICE_URL: str = ""
+PDF_CONCURRENCY_LIMIT: int = 5
+```
+
+## Order Update (edición pre-DELIVERED)
+
+`PUT /orders/{id}` (`ORDERS_MANAGE`) permite editar pedidos antes de `DELIVERED`. Partial update via `model_dump(exclude_unset=True)`:
+
+- **Campos cliente**: `customer_name`, `customer_email`, `customer_phone`, `customer_document`, `customer_address` — solo se actualizan si se envían explícitamente
+- **Notas**: `notes` — se puede limpiar enviando `null`
+- **Items**: `items` — si se envía, reemplaza TODOS los items existentes. Valida stock de nuevo vía `_validate_items()`. Si no se envía, se mantienen los items actuales
+- **Total**: recalculado automáticamente si cambian los items
+
+`_validate_items()` es compartido entre `create()` y `update()` — valida existencia de productos, stock general y stock en estantería. Evita duplicación de lógica.
 
 ## DB engine (lazy)
 
@@ -507,7 +599,7 @@ def _get_async_engine():
 requirements.txt:
   fastapi, uvicorn, sqlalchemy, alembic, pydantic-settings,
   psycopg2-binary, asyncpg, python-jose[cryptography], bcrypt,
-  email-validator, python-multipart, aiofiles
+  email-validator, python-multipart, aiofiles, jinja2, httpx, weasyprint
 ```
 
 `python-multipart` requerido para upload de archivos (File/UploadFile). `aiofiles` para servir estáticos async.

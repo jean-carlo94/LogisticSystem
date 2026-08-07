@@ -1,46 +1,55 @@
 {
-  "_version": "0.8.0",
-  "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API. Incluye multitenant y POS.",
-
+  "_version": "1.0.0",
+  "_guia": "Documento para agente frontend. Version 1.0.0: permisos estandarizados {modulo}_{accion}. Convencion: view|create|edit|delete + acciones especificas por modulo. Roles predefinidos: Admin, Operator, Viewer, Waiter, Cashier.",
   "base_url": "http://localhost:8000/api/v1",
   "auth_header": "Authorization: Bearer {token}",
   "content_type": "application/json",
   "content_type_upload": "multipart/form-data",
-
   "multitenant": {
     "_resumen": "Sistema multitenant con schema compartido. Cada usuario pertenece a un tenant (empresa). Los datos se aíslan automáticamente: productos, ventas, pedidos, estanterías, categorías, etc. no se cruzan entre tenants.",
     "platform_admin": {
       "quien": "Usuario con is_super_admin=true y tenant_id=null",
       "sin_header": "Ve TODOS los tenants combinados (sin filtrar)",
       "con_header": "Usa header X-Tenant: <slug> para switchear a un tenant específico y ver solo sus datos",
-      "crear_tenant": "POST /tenants/ (requiere permiso tenants_manage, solo platform admin)"
+      "crear_tenant": "POST /tenants/ (requiere permiso tenants_view, solo platform admin)"
     },
     "tenant_user": {
       "quien": "Usuario con tenant_id asignado",
       "comportamiento": "Automáticamente solo ve/modifica datos de su propio tenant. No necesita header adicional.",
       "jwt": "El JWT incluye el campo 'tid' con el tenant_id"
     },
-      "reglas_frontend": [
-        "Si el usuario es platform admin (is_super_admin=true), mostrar selector de tenant en la UI.",
-        "Al seleccionar un tenant, enviar header X-Tenant: acme-corp en todas las requests.",
-        "Si el usuario NO es platform admin, no mostrar selector de tenant. El scoping es automático.",
-        "Las respuestas de API no incluyen tenant_id en el JSON (es interno). El frontend no necesita manejarlo.",
-        "Para obtener la lista de tenants disponibles: GET /tenants/ (solo platform admin).",
-        "Si un tenant está deshabilitado (is_active=false), todas las requests retornan 403 'Este tenant está deshabilitado'. El frontend debe detectar este error y mostrar mensaje apropiado."
-      ]
+    "reglas_frontend": [
+      "Si el usuario es platform admin (is_super_admin=true), mostrar selector de tenant en la UI.",
+      "Al seleccionar un tenant, enviar header X-Tenant: acme-corp en todas las requests.",
+      "Si el usuario NO es platform admin, no mostrar selector de tenant. El scoping es automático.",
+      "Las respuestas de API no incluyen tenant_id en el JSON (es interno). El frontend no necesita manejarlo.",
+      "Para obtener la lista de tenants disponibles: GET /tenants/ (solo platform admin).",
+      "Si un tenant está deshabilitado (is_active=false), todas las requests retornan 403 'Este tenant está deshabilitado'. El frontend debe detectar este error y mostrar mensaje apropiado."
+    ]
   },
-
   "respuestas_de_error": {
-    "400": { "detail": "string — mensaje de validación" },
-    "401": { "detail": "No autorizado" },
-    "403": { "detail": "Acceso denegado" },
-    "404": { "detail": "Recurso no encontrado" },
-    "409": { "detail": "string — conflicto (duplicado, restricción)" },
+    "400": {
+      "detail": "string — mensaje de validación"
+    },
+    "401": {
+      "detail": "No autorizado"
+    },
+    "403": {
+      "detail": "Acceso denegado"
+    },
+    "404": {
+      "detail": "Recurso no encontrado"
+    },
+    "409": {
+      "detail": "string — conflicto (duplicado, restricción)"
+    },
     "422": "FastAPI validation error (campos inválidos)"
   },
-
   "paginacion": {
-    "request_query": { "page": "int (default 1)", "size": "int (default 20, max 100)" },
+    "request_query": {
+      "page": "int (default 1)",
+      "size": "int (default 20, max 100)"
+    },
     "response_shape": {
       "items": "list<T>",
       "total": "int",
@@ -49,7 +58,6 @@
       "pages": "int"
     }
   },
-
   "filtros": {
     "_resumen": "TODAS las propiedades de cualquier entidad son filtrables. Pasas cualquier query param y el sistema lo convierte al tipo correcto automáticamente.",
     "comportamiento_por_tipo": {
@@ -67,28 +75,68 @@
     },
     "combinacion": "Múltiples filtros se combinan con AND. Parámetros page/size están reservados y no se usan como filtro.",
     "propiedades_con_setter": "Campos como Product.name, Product.price, Product.stock usan @property. El sistema los resuelve automáticamente al atributo privado (_name, _price, _stock). El frontend usa siempre el nombre público.",
-
     "documentados_en_swagger": "Los campos seriales (unique) aparecen como Query params visibles en /docs. El resto funciona igual aunque no se vean en Swagger."
   },
-
   "filtros_por_entidad": {
     "products": {
       "documentado_swagger": "barcode",
       "todos_los_campos": {
-        "barcode": { "tipo": "string", "ejemplo": "?barcode=BAR-001" },
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=tornillo" },
-        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=acero" },
-        "price": { "tipo": "float (=)", "ejemplo": "?price=15.0" },
-        "stock": { "tipo": "int (=)", "ejemplo": "?stock=100" },
-        "state": { "tipo": "enum (=)", "ejemplo": "?state=ACTIVE" },
-        "weight_kg": { "tipo": "float (=)", "ejemplo": "?weight_kg=2" },
-        "width_cm": { "tipo": "float (=)", "ejemplo": "?width_cm=5" },
-        "height_cm": { "tipo": "float (=)", "ejemplo": "?height_cm=5" },
-        "depth_cm": { "tipo": "float (=)", "ejemplo": "?depth_cm=5" },
-        "image_path": { "tipo": "string (ILIKE)", "ejemplo": "?image_path=products/x.jpg" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "create_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?create_at=2026-07-31" },
-        "update_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?update_at=2026-07-31" }
+        "barcode": {
+          "tipo": "string",
+          "ejemplo": "?barcode=BAR-001"
+        },
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=tornillo"
+        },
+        "description": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?description=acero"
+        },
+        "price": {
+          "tipo": "float (=)",
+          "ejemplo": "?price=15.0"
+        },
+        "stock": {
+          "tipo": "int (=)",
+          "ejemplo": "?stock=100"
+        },
+        "state": {
+          "tipo": "enum (=)",
+          "ejemplo": "?state=ACTIVE"
+        },
+        "weight_kg": {
+          "tipo": "float (=)",
+          "ejemplo": "?weight_kg=2"
+        },
+        "width_cm": {
+          "tipo": "float (=)",
+          "ejemplo": "?width_cm=5"
+        },
+        "height_cm": {
+          "tipo": "float (=)",
+          "ejemplo": "?height_cm=5"
+        },
+        "depth_cm": {
+          "tipo": "float (=)",
+          "ejemplo": "?depth_cm=5"
+        },
+        "image_path": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?image_path=products/x.jpg"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "create_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?create_at=2026-07-31"
+        },
+        "update_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?update_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /products/?state=ACTIVE&stock=100",
@@ -100,19 +148,57 @@
     "users": {
       "documentado_swagger": "email",
       "todos_los_campos": {
-        "email": { "tipo": "string (ILIKE)", "ejemplo": "?email=admin" },
-        "first_name": { "tipo": "string (ILIKE)", "ejemplo": "?first_name=Admin" },
-        "last_name": { "tipo": "string (ILIKE)", "ejemplo": "?last_name=Lopez" },
-        "phone": { "tipo": "string (ILIKE)", "ejemplo": "?phone=+569" },
-        "city": { "tipo": "string (ILIKE)", "ejemplo": "?city=Santiago" },
-        "country": { "tipo": "string (ILIKE)", "ejemplo": "?country=Chile" },
-        "is_active": { "tipo": "bool (=)", "ejemplo": "?is_active=true" },
-        "is_super_admin": { "tipo": "bool (=)", "ejemplo": "?is_super_admin=false" },
-        "image_path": { "tipo": "string (ILIKE)", "ejemplo": "?image_path=users/x.jpg" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "hashed_password": { "tipo": "BLOQUEADO — ignorado" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "email": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?email=admin"
+        },
+        "first_name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?first_name=Admin"
+        },
+        "last_name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?last_name=Lopez"
+        },
+        "phone": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?phone=+569"
+        },
+        "city": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?city=Santiago"
+        },
+        "country": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?country=Chile"
+        },
+        "is_active": {
+          "tipo": "bool (=)",
+          "ejemplo": "?is_active=true"
+        },
+        "is_super_admin": {
+          "tipo": "bool (=)",
+          "ejemplo": "?is_super_admin=false"
+        },
+        "image_path": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?image_path=users/x.jpg"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "hashed_password": {
+          "tipo": "BLOQUEADO — ignorado"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /users/?is_active=true&country=Chile",
@@ -124,18 +210,54 @@
     "shelves": {
       "documentado_swagger": "code",
       "todos_los_campos": {
-        "code": { "tipo": "string (ILIKE)", "ejemplo": "?code=A-01" },
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=estante" },
-        "aisle": { "tipo": "string (ILIKE)", "ejemplo": "?aisle=A" },
-        "row": { "tipo": "int (=)", "ejemplo": "?row=1" },
-        "level": { "tipo": "int (=)", "ejemplo": "?level=3" },
-        "max_weight_kg": { "tipo": "float (=)", "ejemplo": "?max_weight_kg=200" },
-        "width_cm": { "tipo": "float (=)", "ejemplo": "?width_cm=100" },
-        "height_cm": { "tipo": "float (=)", "ejemplo": "?height_cm=50" },
-        "depth_cm": { "tipo": "float (=)", "ejemplo": "?depth_cm=40" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "code": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?code=A-01"
+        },
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=estante"
+        },
+        "aisle": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?aisle=A"
+        },
+        "row": {
+          "tipo": "int (=)",
+          "ejemplo": "?row=1"
+        },
+        "level": {
+          "tipo": "int (=)",
+          "ejemplo": "?level=3"
+        },
+        "max_weight_kg": {
+          "tipo": "float (=)",
+          "ejemplo": "?max_weight_kg=200"
+        },
+        "width_cm": {
+          "tipo": "float (=)",
+          "ejemplo": "?width_cm=100"
+        },
+        "height_cm": {
+          "tipo": "float (=)",
+          "ejemplo": "?height_cm=50"
+        },
+        "depth_cm": {
+          "tipo": "float (=)",
+          "ejemplo": "?depth_cm=40"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /shelves/?aisle=A&row=1",
@@ -148,11 +270,26 @@
     "roles": {
       "documentado_swagger": "name",
       "todos_los_campos": {
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=admin" },
-        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=admin" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=admin"
+        },
+        "description": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?description=admin"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /roles/?name=Admin",
@@ -163,13 +300,34 @@
     "events": {
       "documentado_swagger": "ninguno (solo page/size)",
       "todos_los_campos": {
-        "entity_type": { "tipo": "string (ILIKE)", "ejemplo": "?entity_type=Product" },
-        "entity_id": { "tipo": "int (=)", "ejemplo": "?entity_id=1" },
-        "action": { "tipo": "enum (=)", "ejemplo": "?action=CREATE" },
-        "user_id": { "tipo": "int (=)", "ejemplo": "?user_id=1" },
-        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=creado" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "create_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?create_at=2026-07-31" }
+        "entity_type": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?entity_type=Product"
+        },
+        "entity_id": {
+          "tipo": "int (=)",
+          "ejemplo": "?entity_id=1"
+        },
+        "action": {
+          "tipo": "enum (=)",
+          "ejemplo": "?action=CREATE"
+        },
+        "user_id": {
+          "tipo": "int (=)",
+          "ejemplo": "?user_id=1"
+        },
+        "description": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?description=creado"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "create_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?create_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /events/?action=CREATE&entity_type=Product",
@@ -181,12 +339,30 @@
     "tenants": {
       "documentado_swagger": "name, slug",
       "todos_los_campos": {
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=acme" },
-        "slug": { "tipo": "string (ILIKE)", "ejemplo": "?slug=acme-corp" },
-        "is_active": { "tipo": "bool (=)", "ejemplo": "?is_active=true" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=acme"
+        },
+        "slug": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?slug=acme-corp"
+        },
+        "is_active": {
+          "tipo": "bool (=)",
+          "ejemplo": "?is_active=true"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /tenants/?is_active=true",
@@ -197,11 +373,26 @@
     "categories": {
       "documentado_swagger": "name",
       "todos_los_campos": {
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=elec" },
-        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=productos" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=elec"
+        },
+        "description": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?description=productos"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /categories/?name=elec",
@@ -211,16 +402,46 @@
     "sales": {
       "documentado_swagger": "ninguno (solo page/size)",
       "todos_los_campos": {
-        "customer_name": { "tipo": "string (ILIKE)", "ejemplo": "?customer_name=juan" },
-        "customer_email": { "tipo": "string (ILIKE)", "ejemplo": "?customer_email=cliente" },
-        "customer_phone": { "tipo": "string (ILIKE)", "ejemplo": "?customer_phone=+569" },
-        "customer_document": { "tipo": "string (ILIKE)", "ejemplo": "?customer_document=12345678" },
-        "customer_address": { "tipo": "string (ILIKE)", "ejemplo": "?customer_address=santiago" },
-        "status": { "tipo": "enum (=)", "ejemplo": "?status=COMPLETED" },
-        "total": { "tipo": "float (=)", "ejemplo": "?total=15000" },
-        "notes": { "tipo": "string (ILIKE)", "ejemplo": "?notes=urgente" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" }
+        "customer_name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_name=juan"
+        },
+        "customer_email": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_email=cliente"
+        },
+        "customer_phone": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_phone=+569"
+        },
+        "customer_document": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_document=12345678"
+        },
+        "customer_address": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_address=santiago"
+        },
+        "status": {
+          "tipo": "enum (=)",
+          "ejemplo": "?status=COMPLETED"
+        },
+        "total": {
+          "tipo": "float (=)",
+          "ejemplo": "?total=15000"
+        },
+        "notes": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?notes=urgente"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /sales/?status=COMPLETED",
@@ -231,17 +452,50 @@
     "orders": {
       "documentado_swagger": "ninguno (solo page/size)",
       "todos_los_campos": {
-        "customer_name": { "tipo": "string (ILIKE)", "ejemplo": "?customer_name=juan" },
-        "customer_email": { "tipo": "string (ILIKE)", "ejemplo": "?customer_email=cliente" },
-        "customer_phone": { "tipo": "string (ILIKE)", "ejemplo": "?customer_phone=+569" },
-        "customer_document": { "tipo": "string (ILIKE)", "ejemplo": "?customer_document=12345678" },
-        "customer_address": { "tipo": "string (ILIKE)", "ejemplo": "?customer_address=santiago" },
-        "status": { "tipo": "enum (=)", "ejemplo": "?status=CREATED" },
-        "total": { "tipo": "float (=)", "ejemplo": "?total=25000" },
-        "notes": { "tipo": "string (ILIKE)", "ejemplo": "?notes=entregar" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "customer_name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_name=juan"
+        },
+        "customer_email": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_email=cliente"
+        },
+        "customer_phone": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_phone=+569"
+        },
+        "customer_document": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_document=12345678"
+        },
+        "customer_address": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?customer_address=santiago"
+        },
+        "status": {
+          "tipo": "enum (=)",
+          "ejemplo": "?status=CREATED"
+        },
+        "total": {
+          "tipo": "float (=)",
+          "ejemplo": "?total=25000"
+        },
+        "notes": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?notes=entregar"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /orders/?status=CREATED",
@@ -252,13 +506,34 @@
     "taxes": {
       "documentado_swagger": "name",
       "todos_los_campos": {
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=iva" },
-        "rate": { "tipo": "float (=)", "ejemplo": "?rate=19" },
-        "description": { "tipo": "string (ILIKE)", "ejemplo": "?description=impuesto" },
-        "is_active": { "tipo": "bool (=)", "ejemplo": "?is_active=true" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=iva"
+        },
+        "rate": {
+          "tipo": "float (=)",
+          "ejemplo": "?rate=19"
+        },
+        "description": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?description=impuesto"
+        },
+        "is_active": {
+          "tipo": "bool (=)",
+          "ejemplo": "?is_active=true"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /taxes/?is_active=true",
@@ -269,14 +544,38 @@
     "customers": {
       "documentado_swagger": "email, document",
       "todos_los_campos": {
-        "name": { "tipo": "string (ILIKE)", "ejemplo": "?name=juan" },
-        "email": { "tipo": "string (ILIKE)", "ejemplo": "?email=juan@test.com" },
-        "phone": { "tipo": "string (ILIKE)", "ejemplo": "?phone=+569" },
-        "document": { "tipo": "string (ILIKE)", "ejemplo": "?document=12345678" },
-        "address": { "tipo": "string (ILIKE)", "ejemplo": "?address=santiago" },
-        "id": { "tipo": "int (=)", "ejemplo": "?id=1" },
-        "created_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?created_at=2026-07-31" },
-        "updated_at": { "tipo": "date (YYYY-MM-DD)", "ejemplo": "?updated_at=2026-07-31" }
+        "name": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?name=juan"
+        },
+        "email": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?email=juan@test.com"
+        },
+        "phone": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?phone=+569"
+        },
+        "document": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?document=12345678"
+        },
+        "address": {
+          "tipo": "string (ILIKE)",
+          "ejemplo": "?address=santiago"
+        },
+        "id": {
+          "tipo": "int (=)",
+          "ejemplo": "?id=1"
+        },
+        "created_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?created_at=2026-07-31"
+        },
+        "updated_at": {
+          "tipo": "date (YYYY-MM-DD)",
+          "ejemplo": "?updated_at=2026-07-31"
+        }
       },
       "ejemplos_combinados": [
         "GET /customers/?email=juan@test.com",
@@ -285,14 +584,12 @@
       ]
     }
   },
-
   "endpoints": {
-
     "products": {
       "list": {
         "method": "GET",
         "path": "/products/",
-        "auth": "products_read",
+        "auth": "products_view",
         "query": {
           "page": "int",
           "size": "int",
@@ -325,18 +622,16 @@
           "Para buscar: usa ?name=mart y encuentra 'Martillo' (ILIKE case-insensitive)."
         ]
       },
-
       "get_one": {
         "method": "GET",
         "path": "/products/{id}",
-        "auth": "products_read",
+        "auth": "products_view",
         "response_shape": "mismo que list.items[0]"
       },
-
       "by_barcode": {
         "method": "GET",
         "path": "/products/by-barcode/{barcode}",
-        "auth": "products_read",
+        "auth": "products_view",
         "response_shape": "mismo que list.items[0] (incluye taxes)",
         "frontend_notes": [
           "Endpoint rápido para escanear código de barras en POS.",
@@ -344,7 +639,6 @@
           "Usar en flujo de stations/add_items para obtener unit_price del producto."
         ]
       },
-
       "create": {
         "method": "POST",
         "path": "/products/",
@@ -373,7 +667,6 @@
           "weight/dimensions son para validación de estantería luego."
         ]
       },
-
       "update": {
         "method": "PUT",
         "path": "/products/{id}",
@@ -381,20 +674,20 @@
         "request_body": "Todos los campos de create PERO todos son opcionales (partial update). Solo envía los campos que cambian.",
         "response_shape": "mismo que list.items[0]"
       },
-
       "delete": {
         "method": "DELETE",
         "path": "/products/{id}",
         "auth": "products_delete",
         "response": "204 No Content"
       },
-
       "upload_image": {
         "method": "POST",
         "path": "/products/{id}/image",
         "auth": "products_update",
         "content_type": "multipart/form-data",
-        "request_body": { "file": "binary (campo del form llamado 'file')" },
+        "request_body": {
+          "file": "binary (campo del form llamado 'file')"
+        },
         "response_shape": "mismo que product (con image_url actualizado)",
         "frontend_notes": [
           "Usa FormData: form.append('file', fileObject)",
@@ -402,18 +695,16 @@
           "La URL nueva viene en image_url del response."
         ]
       },
-
       "delete_image": {
         "method": "DELETE",
         "path": "/products/{id}/image",
         "auth": "products_update",
         "response": "204 No Content"
       },
-
       "qr": {
         "method": "GET",
         "path": "/products/{id}/qr",
-        "auth": "products_read",
+        "auth": "products_view",
         "response_shape": {
           "product_id": "int",
           "name": "string",
@@ -432,7 +723,6 @@
         ]
       }
     },
-
     "users_auth": {
       "register": {
         "method": "POST",
@@ -461,9 +751,10 @@
           "created_at": "ISO8601",
           "updated_at": "ISO8601"
         },
-        "errores": { "409": "El email ya esta registrado" }
+        "errores": {
+          "409": "El email ya esta registrado"
+        }
       },
-
       "login": {
         "method": "POST",
         "path": "/auth/login",
@@ -476,9 +767,11 @@
           "access_token": "string (JWT)",
           "token_type": "bearer"
         },
-        "errores": { "401": "Email o contrasena incorrectos", "403": "Usuario inactivo" }
+        "errores": {
+          "401": "Email o contrasena incorrectos",
+          "403": "Usuario inactivo"
+        }
       },
-
       "me": {
         "method": "GET",
         "path": "/auth/me",
@@ -497,8 +790,15 @@
           "image_url": "string|null",
           "created_at": "ISO8601",
           "updated_at": "ISO8601",
-          "roles": [{"id": "int", "name": "string"}],
-          "permissions": ["string (ej: products_read)"]
+          "roles": [
+            {
+              "id": "int",
+              "name": "string"
+            }
+          ],
+          "permissions": [
+            "string (ej: products_read)"
+          ]
         },
         "frontend_notes": [
           "Usa permissions para mostrar/ocultar botones y rutas en el frontend.",
@@ -506,7 +806,6 @@
           "roles es lista de roles asignados (nombres tipo Admin, Operator, Viewer)."
         ]
       },
-
       "update_me": {
         "method": "PUT",
         "path": "/auth/me",
@@ -521,37 +820,45 @@
         },
         "response_shape": "mismo que login response (sin token)"
       },
-
       "upload_avatar": {
         "method": "POST",
         "path": "/auth/me/image",
         "auth": "token requerido",
         "content_type": "multipart/form-data",
-        "request_body": { "file": "binary" },
+        "request_body": {
+          "file": "binary"
+        },
         "response_shape": "mismo que user"
       },
-
       "delete_avatar": {
         "method": "DELETE",
         "path": "/auth/me/image",
         "auth": "token requerido",
         "response": "204 No Content"
       },
-
       "pin_login": {
         "method": "POST",
         "path": "/auth/pin-login",
         "auth": "público (rate limit: 3 intentos/min)",
-        "request_body": {"email": "string", "pin": "string (4-6 dígitos)"},
-        "response_shape": {"access_token": "string (JWT)", "token_type": "bearer"},
-        "errores": {"401": "Credenciales invalidas", "429": "Demasiados intentos"},
-        "frontend_notes": ["Login rápido para cajeros. El admin debe setear el PIN primero (PUT /users/{id}/pin)."]
+        "request_body": {
+          "email": "string",
+          "pin": "string (4-6 dígitos)"
+        },
+        "response_shape": {
+          "access_token": "string (JWT)",
+          "token_type": "bearer"
+        },
+        "errores": {
+          "401": "Credenciales invalidas",
+          "429": "Demasiados intentos"
+        },
+        "frontend_notes": [
+          "Login rápido para cajeros. El admin debe setear el PIN primero (PUT /users/{id}/pin)."
+        ]
       }
     },
-
     "users_admin": {
-      "_nota": "Solo usuarios con permiso users_manage o super_admin",
-
+      "_nota": "Solo usuarios con permiso users_view o super_admin",
       "list": {
         "method": "GET",
         "path": "/users/",
@@ -583,9 +890,12 @@
           "hashed_password está bloqueado, se ignora si se envía como filtro."
         ]
       },
-
-      "get_one": { "method": "GET", "path": "/users/{id}", "auth": "users_manage", "response_shape": "mismo que list.items[0]" },
-
+      "get_one": {
+        "method": "GET",
+        "path": "/users/{id}",
+        "auth": "users_manage",
+        "response_shape": "mismo que list.items[0]"
+      },
       "update": {
         "method": "PUT",
         "path": "/users/{id}",
@@ -600,53 +910,70 @@
           "country": "string|null",
           "is_active": "bool|null"
         },
-        "errores": { "409": "El email ya esta en uso" }
+        "errores": {
+          "409": "El email ya esta en uso"
+        }
       },
-
-      "delete": { "method": "DELETE", "path": "/users/{id}", "auth": "users_manage", "response": "204 No Content" },
-
+      "delete": {
+        "method": "DELETE",
+        "path": "/users/{id}",
+        "auth": "users_manage",
+        "response": "204 No Content"
+      },
       "upload_image": {
         "method": "POST",
         "path": "/users/{id}/image",
         "auth": "users_manage",
         "content_type": "multipart/form-data",
-        "request_body": { "file": "binary" }
+        "request_body": {
+          "file": "binary"
+        }
       },
-
-      "delete_image": { "method": "DELETE", "path": "/users/{id}/image", "auth": "users_manage", "response": "204 No Content" },
-
+      "delete_image": {
+        "method": "DELETE",
+        "path": "/users/{id}/image",
+        "auth": "users_manage",
+        "response": "204 No Content"
+      },
       "set_pin": {
         "method": "PUT",
         "path": "/users/{id}/pin",
         "auth": "users_manage",
-        "request_body": {"pin": "string (4-6 dígitos)"},
+        "request_body": {
+          "pin": "string (4-6 dígitos)"
+        },
         "response": "204 No Content",
-        "frontend_notes": ["Setea/resetea el PIN de un cajero. El PIN se hashea con bcrypt (mismo mecanismo que password)."]
+        "frontend_notes": [
+          "Setea/resetea el PIN de un cajero. El PIN se hashea con bcrypt (mismo mecanismo que password)."
+        ]
       },
-
       "get_roles": {
         "method": "GET",
         "path": "/users/{id}/roles",
         "auth": "users_manage",
-        "response_shape": [{"id": "int", "name": "string"}]
+        "response_shape": [
+          {
+            "id": "int",
+            "name": "string"
+          }
+        ]
       },
-
       "assign_role": {
         "method": "POST",
         "path": "/users/{id}/roles",
         "auth": "users_manage",
-        "request_body": { "role_id": "int" },
+        "request_body": {
+          "role_id": "int"
+        },
         "response": "204 No Content"
       }
     },
-
     "shelves": {
       "_intro": "Las estanterías organizan los productos en la bodega. Cada producto puede estar en múltiples estanterías con cantidades parciales. El sistema valida dimensiones, peso, volumen y stock disponible. POST /items hace upsert (suma cantidad si ya existe).",
-
       "list": {
         "method": "GET",
         "path": "/shelves/",
-        "auth": "shelves_read",
+        "auth": "shelves_view",
         "query": {
           "page": "int",
           "size": "int",
@@ -672,11 +999,10 @@
           "Int/Float con exact match: ?row=1&level=3"
         ]
       },
-
       "get_detail": {
         "method": "GET",
         "path": "/shelves/{id}",
-        "auth": "shelves_read",
+        "auth": "shelves_view",
         "response_shape": {
           "id": "int",
           "name": "string",
@@ -709,7 +1035,6 @@
           "Usa product_id para navegar al detalle del producto. product_name es solo para display."
         ]
       },
-
       "create": {
         "method": "POST",
         "path": "/shelves/",
@@ -726,13 +1051,14 @@
           "depth_cm": "float (>=0, default 0, ej: 40.0)"
         },
         "response_shape": "mismo que list.items[0] (201 Created)",
-        "errores": { "409": "El código de estantería ya existe" },
+        "errores": {
+          "409": "El código de estantería ya existe"
+        },
         "frontend_notes": [
           "code es como un SKU de la estantería — debe ser único. Define tu propio esquema (ej: PASILLO-FILA-NIVEL).",
           "Si max_weight_kg=0 o dimensiones en 0, esa validación se omite al asignar productos."
         ]
       },
-
       "update": {
         "method": "PUT",
         "path": "/shelves/{id}",
@@ -740,7 +1066,6 @@
         "request_body": "Todos los campos de create PERO opcionales (partial update).",
         "response_shape": "mismo que list.items[0]"
       },
-
       "delete": {
         "method": "DELETE",
         "path": "/shelves/{id}",
@@ -754,7 +1079,6 @@
           "Sugerencia UX: mostrar confirmación 'Esta estantería tiene X productos. ¿Moverlos primero?'"
         ]
       },
-
       "add_item": {
         "method": "POST",
         "path": "/shelves/{shelf_id}/items",
@@ -784,7 +1108,6 @@
           "La validación de stock considera TODAS las estanterías donde el producto está asignado."
         ]
       },
-
       "update_item": {
         "method": "PUT",
         "path": "/shelves/{shelf_id}/items/{item_id}",
@@ -804,7 +1127,6 @@
           "Para incrementar/decrementar stock, calcula nuevo quantity y haz PUT."
         ]
       },
-
       "remove_item": {
         "method": "DELETE",
         "path": "/shelves/{shelf_id}/items/{item_id}",
@@ -816,13 +1138,16 @@
         ]
       }
     },
-
     "categories": {
       "list": {
         "method": "GET",
         "path": "/categories/",
-        "auth": "categories_read",
-        "query": { "page": "int", "size": "int", "name": "string (ILIKE, documentado en Swagger)" },
+        "auth": "categories_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "name": "string (ILIKE, documentado en Swagger)"
+        },
         "response_shape": {
           "id": "int",
           "name": "string",
@@ -844,7 +1169,9 @@
           "description": "string|null (max 500)"
         },
         "response_shape": "mismo que list.items[0] (201 Created)",
-        "errores": { "409": "Si name ya existe: 'La categoría ya existe'" }
+        "errores": {
+          "409": "Si name ya existe: 'La categoría ya existe'"
+        }
       },
       "update": {
         "method": "PUT",
@@ -860,15 +1187,17 @@
         "response": "204 No Content"
       }
     },
-
     "taxes": {
       "_intro": "Impuestos que se aplican a productos. Un producto puede tener múltiples impuestos (similar a categorías). Al crear una venta, los impuestos se calculan automáticamente desde los taxes asignados al producto.",
-
       "list": {
         "method": "GET",
         "path": "/taxes/",
-        "auth": "taxes_read",
-        "query": { "page": "int", "size": "int", "name": "string (ILIKE, documentado en Swagger)" },
+        "auth": "taxes_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "name": "string (ILIKE, documentado en Swagger)"
+        },
         "response_shape": {
           "id": "int",
           "tenant_id": "int",
@@ -893,7 +1222,9 @@
           "description": "string|null (max 500)"
         },
         "response_shape": "mismo que list.items[0] (201 Created)",
-        "errores": { "409": "Si name ya existe: 'El impuesto ya existe'" }
+        "errores": {
+          "409": "Si name ya existe: 'El impuesto ya existe'"
+        }
       },
       "update": {
         "method": "PUT",
@@ -909,15 +1240,18 @@
         "response": "204 No Content"
       }
     },
-
     "customers": {
       "_intro": "Clientes del tenant. Se crean automáticamente al hacer una venta/pedido con email o documento. Si el cliente ya existe (mismo email o documento), se reutiliza.",
-
       "list": {
         "method": "GET",
         "path": "/customers/",
-        "auth": "customers_read",
-        "query": { "page": "int", "size": "int", "email": "string (ILIKE)", "document": "string (ILIKE)" },
+        "auth": "customers_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "email": "string (ILIKE)",
+          "document": "string (ILIKE)"
+        },
         "response_shape": {
           "id": "int",
           "tenant_id": "int",
@@ -950,7 +1284,7 @@
       "get_one": {
         "method": "GET",
         "path": "/customers/{id}",
-        "auth": "customers_read",
+        "auth": "customers_view",
         "response_shape": "mismo que list.items[0]"
       },
       "update": {
@@ -961,15 +1295,17 @@
         "response_shape": "mismo que list.items[0]"
       }
     },
-
     "sales": {
       "_intro": "Las ventas descuentan stock del producto y opcionalmente de estantería. Si shelf_id es null, solo descuenta stock del producto. Si shelf_id está presente, descuenta de la estantería Y del producto.",
-
       "list": {
         "method": "GET",
         "path": "/sales/",
-        "auth": "sales_read",
-        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), customer_email (ILIKE), status (=), total (=), notes (ILIKE)" },
+        "auth": "sales_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "_filtros": "customer_name (ILIKE), customer_email (ILIKE), status (=), total (=), notes (ILIKE)"
+        },
         "response_shape": {
           "id": "int",
           "customer_name": "string",
@@ -986,7 +1322,6 @@
           "created_at": "ISO8601"
         }
       },
-
       "create": {
         "method": "POST",
         "path": "/sales/",
@@ -1041,6 +1376,7 @@
           "409": "Stock insuficiente en producto o estantería"
         },
         "frontend_notes": [
+          "Requiere caja abierta si el módulo cash_register está habilitado en el tenant.",
           "Si shelf_id es null/omitido, solo se descuenta product.stock. No se toca estantería.",
           "Si shelf_id tiene valor, valida que producto esté en esa estantería con stock suficiente.",
           "La venta siempre descuenta product.stock sin importar shelf_id.",
@@ -1049,7 +1385,6 @@
           "payment_status inicia en PENDING. Se actualiza automáticamente al registrar pagos."
         ]
       },
-
       "cancel": {
         "method": "POST",
         "path": "/sales/{id}/cancel",
@@ -1070,11 +1405,10 @@
           "Status cambia a CANCELLED, payment_status a REFUNDED."
         ]
       },
-
       "receipt": {
         "method": "GET",
         "path": "/sales/{id}/receipt",
-        "auth": "sales_read",
+        "auth": "sales_view",
         "response_shape": {
           "sale_id": "int",
           "store_name": "string",
@@ -1087,13 +1421,25 @@
               "unit_price": "float",
               "subtotal": "float",
               "tax_amount": "float",
-              "taxes": [{"name": "string", "rate": "float", "amount": "float"}]
+              "taxes": [
+                {
+                  "name": "string",
+                  "rate": "float",
+                  "amount": "float"
+                }
+              ]
             }
           ],
           "subtotal": "float",
           "tax_total": "float",
           "total": "float",
-          "payments": [{"id": "int", "method": "string", "amount": "float"}],
+          "payments": [
+            {
+              "id": "int",
+              "method": "string",
+              "amount": "float"
+            }
+          ],
           "status": "string",
           "payment_status": "string",
           "created_at": "ISO8601"
@@ -1104,23 +1450,56 @@
           "items.taxes es el desglose de impuestos por línea."
         ]
       },
-
+      "invoice_html": {
+        "method": "GET",
+        "path": "/sales/{id}/invoice/html",
+        "auth": "sales_view",
+        "query": {
+          "auto_print": "bool (default false, si true activa window.print() al cargar)"
+        },
+        "response": "text/html — factura HTML renderizada con la plantilla del tenant + datos reales de la venta",
+        "frontend_notes": [
+          "Usar para mostrar factura en pantalla o 'imprimir' desde frontend.",
+          "Con ?auto_print=true, el HTML incluye <script>window.print()</script> para impresión automática.",
+          "Flujo típico: abrir en nueva pestaña con auto_print=true → se imprime automáticamente.",
+          "El HTML usa CSS @media print para ocultar botones y ajustar layout al imprimir.",
+          "Alternativa sin auto_print: cargar el HTML en un iframe o div y mostrar 'botón imprimir'."
+        ]
+      },
+      "invoice_pdf": {
+        "method": "GET",
+        "path": "/sales/{id}/invoice/pdf",
+        "auth": "sales_view",
+        "query": {
+          "regenerate": "bool (default false, si true fuerza regeneración del PDF ignorando caché)"
+        },
+        "response": "application/pdf — archivo PDF de la factura. Content-Disposition: inline (se abre en navegador, no descarga forzada)",
+        "frontend_notes": [
+          "El PDF se genera con servicio externo configurable (Gotenberg, WeasyPrint, Custom).",
+          "Usa caché automático: primera vez genera PDF y lo guarda, siguientes requests devuelven el guardado.",
+          "?regenerate=true fuerza regeneración (ej: si se editó la plantilla y se quiere el PDF actualizado).",
+          "Content-Disposition es 'inline' → el navegador lo abre en visor PDF en vez de descargarlo.",
+          "Para forzar descarga, el frontend puede agregar ?download=true y cambiar el filename con fetch + Blob."
+        ]
+      },
       "get_detail": {
         "method": "GET",
         "path": "/sales/{id}",
-        "auth": "sales_read",
+        "auth": "sales_view",
         "response_shape": "mismo que create response"
       }
     },
-
     "orders": {
       "_intro": "Los pedidos tienen una máquina de estados: CREATED → PREPARING → READY → DELIVERED. Solo forward. Al hacer deliver, se crea una venta automáticamente. shelf_id es opcional como en sales. Datos de cliente opcionales con auto-detección (mismo email/documento reutiliza cliente existente).",
-
       "list": {
         "method": "GET",
         "path": "/orders/",
-        "auth": "orders_read",
-        "query": { "page": "int", "size": "int", "_filtros": "customer_name (ILIKE), customer_email (ILIKE), status (=), total (=), notes (ILIKE)" },
+        "auth": "orders_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "_filtros": "customer_name (ILIKE), customer_email (ILIKE), status (=), total (=), notes (ILIKE)"
+        },
         "response_shape": {
           "id": "int",
           "customer_name": "string",
@@ -1137,7 +1516,6 @@
           "updated_at": "ISO8601"
         }
       },
-
       "create": {
         "method": "POST",
         "path": "/orders/",
@@ -1186,62 +1564,100 @@
           "409": "Stock insuficiente en producto o estantería"
         },
         "frontend_notes": [
+          "NO requiere caja abierta. El mesero puede crear pedidos sin caja.",
           "Al crear, valida stock actual de producto y estantería (si shelf_id especificado).",
           "El pedido no descuenta stock al crearse — solo valida disponibilidad.",
-          "El descuento real ocurre al hacer deliver (cuando se crea la venta)."
+          "El descuento real ocurre al hacer deliver (cuando se crea la venta).",
+          "cash_register_id será null al crear. Se asigna al deliver con la caja del cajero que entrega."
         ]
       },
-
       "get_detail": {
         "method": "GET",
         "path": "/orders/{id}",
-        "auth": "orders_read",
+        "auth": "orders_view",
         "response_shape": "mismo que create response"
       },
-
       "prepare": {
         "method": "POST",
         "path": "/orders/{id}/prepare",
         "auth": "orders_manage",
         "request_body": null,
         "response_shape": "mismo que detail (status cambia a PREPARING)",
-        "errores": { "409": "Transición inválida si no está en CREATED" },
-        "frontend_notes": ["Cambia estado de CREATED a PREPARING. Solo forward."]
+        "errores": {
+          "409": "Transición inválida si no está en CREATED"
+        },
+        "frontend_notes": [
+          "Cambia estado de CREATED a PREPARING. Solo forward."
+        ]
       },
-
       "ready": {
         "method": "POST",
         "path": "/orders/{id}/ready",
         "auth": "orders_manage",
         "request_body": null,
         "response_shape": "mismo que detail (status cambia a READY)",
-        "errores": { "409": "Transición inválida si no está en PREPARING" }
+        "errores": {
+          "409": "Transición inválida si no está en PREPARING"
+        }
       },
-
       "deliver": {
         "method": "POST",
         "path": "/orders/{id}/deliver",
         "auth": "orders_manage",
         "request_body": null,
         "response_shape": "mismo que detail (status cambia a DELIVERED)",
-        "errores": { "409": "Transición inválida si no está en READY; o stock insuficiente al crear venta" },
+        "errores": {
+          "409": "Transición inválida si no está en READY; stock insuficiente al crear venta; Debe abrir una caja primero (si módulo cash_register habilitado)"
+        },
         "frontend_notes": [
-          "Crea una venta automáticamente con los items del pedido.",
+          "Requiere caja abierta. El cajero debe tener caja OPEN para entregar.",
+          "Crea una venta automáticamente con los items del pedido bajo la caja del cajero que entrega.",
           "Descuenta stock del producto y estantería (si shelf_id presente).",
-          "Si la venta falla por stock insuficiente, el pedido NO cambia a DELIVERED.",
-          "No re-valida stock de estantería más allá de lo que valida SaleService.create()."
+          "Si la venta falla por stock insuficiente, el pedido NO cambia a DELIVERED."
+        ]
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/orders/{id}",
+        "auth": "orders_manage",
+        "request_body": {
+          "customer_name": "string|null (opcional)",
+          "customer_email": "string|null (opcional)",
+          "customer_phone": "string|null (opcional)",
+          "customer_document": "string|null (opcional)",
+          "customer_address": "string|null (opcional)",
+          "notes": "string|null (opcional, enviar null para limpiar)",
+          "items": "list|null (opcional. Si se envía, reemplaza TODOS los items existentes. Si no se envía, mantiene los actuales)"
+        },
+        "response_shape": "OrderDetailResponse (201, items actualizados si se enviaron)",
+        "errores": {
+          "409": "Stock insuficiente en producto o estantería",
+          "404": "Producto no encontrado o no asignado a estantería especificada",
+          "400": "El pedido debe tener al menos un producto (si se envían items vacíos)"
+        },
+        "frontend_notes": [
+          "Partial update: solo los campos enviados se modifican. Campos no enviados se mantienen igual.",
+          "Enviar 'notes': null para limpiar las notas.",
+          "Si se envía 'items', reemplaza todos los items existentes (valida stock de nuevo).",
+          "El total se recalcula automáticamente si cambian los items.",
+          "Solo se puede editar antes de DELIVERED (CREATED, PREPARING, READY).",
+          "Útil para corregir datos de cliente, agregar/quitar productos antes de entregar."
         ]
       }
     },
-
     "tenants": {
       "_intro": "Gestión de tenants (empresas). Solo platform admin (is_super_admin=true). Al crear un tenant se generan automáticamente roles Admin/Operator/Viewer y TenantConfig con todos los módulos. Opcionalmente se puede crear el usuario admin del tenant. business_id acepta cualquier identificador fiscal (NIT/RUT) con caracteres especiales. Al deshabilitar (is_active=false), el tenant bloquea todas las operaciones (403).",
-
       "list": {
         "method": "GET",
         "path": "/tenants/",
-        "auth": "tenants_manage",
-        "query": { "page": "int", "size": "int", "name": "string (ILIKE)", "slug": "string (ILIKE)", "business_id": "string (ILIKE)" },
+        "auth": "tenants_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "name": "string (ILIKE)",
+          "slug": "string (ILIKE)",
+          "business_id": "string (ILIKE)"
+        },
         "response_shape": {
           "id": "int",
           "name": "string (nombre de la empresa)",
@@ -1258,11 +1674,10 @@
           "Usar para poblar el selector de tenant en la UI del admin."
         ]
       },
-
       "create": {
         "method": "POST",
         "path": "/tenants/",
-        "auth": "tenants_manage",
+        "auth": "tenants_view",
         "request_body": {
           "name": "string (1-200, requerido, ej: 'Acme Corp')",
           "slug": "string (1-100, requerido, regex ^[a-z0-9-]+$, ej: 'acme-corp')",
@@ -1272,7 +1687,6 @@
         },
         "response_shape": "mismo que list.items[0] (201 Created)",
         "errores": {
-          "409": "Si slug ya existe: 'El slug ya está en uso'",
           "409": "Si admin_email ya existe: 'El email del admin ya está registrado'"
         },
         "frontend_notes": [
@@ -1282,18 +1696,16 @@
           "Los roles Admin/Operator/Viewer y TenantConfig (todos los módulos habilitados) se crean automáticamente."
         ]
       },
-
       "get_one": {
         "method": "GET",
         "path": "/tenants/{id}",
-        "auth": "tenants_manage",
+        "auth": "tenants_view",
         "response_shape": "mismo que list.items[0]"
       },
-
       "update": {
         "method": "PUT",
         "path": "/tenants/{id}",
-        "auth": "tenants_manage",
+        "auth": "tenants_view",
         "request_body": {
           "name": "string|null (1-200, opcional)",
           "business_id": "string|null (max 50, opcional)",
@@ -1301,11 +1713,10 @@
         },
         "response_shape": "mismo que list.items[0]"
       },
-
       "delete": {
         "method": "DELETE",
         "path": "/tenants/{id}",
-        "auth": "tenants_manage",
+        "auth": "tenants_view",
         "response": "204 No Content",
         "frontend_notes": [
           "Soft delete: marca is_active=false, no borra datos.",
@@ -1314,274 +1725,669 @@
         ]
       }
     },
-
     "payments": {
       "_intro": "Registro de pagos por venta. Soporta split payments (múltiples pagos para una venta). Al registrar pagos que suman el total, la venta se marca como PAID automáticamente.",
       "list": {
-        "method": "GET", "path": "/payments/", "auth": "payments_read",
-        "response_shape": {"id": "int", "sale_id": "int", "method": "string", "amount": "float", "reference": "string|null", "created_at": "ISO8601"}
+        "method": "GET",
+        "path": "/payments/",
+        "auth": "payments_view",
+        "response_shape": {
+          "id": "int",
+          "sale_id": "int",
+          "method": "string",
+          "amount": "float",
+          "reference": "string|null",
+          "created_at": "ISO8601"
+        }
       },
       "create": {
-        "method": "POST", "path": "/payments/", "auth": "payments_manage",
-        "request_body": {"sale_id": "int", "method": "string (CASH|CARD|TRANSFER|WALLET|OTHER)", "amount": "float (>0)", "reference": "string|null"},
+        "method": "POST",
+        "path": "/payments/",
+        "auth": "payments_manage",
+        "request_body": {
+          "sale_id": "int",
+          "method": "string (CASH|CARD|TRANSFER|WALLET|OTHER)",
+          "amount": "float (>0)",
+          "reference": "string|null"
+        },
         "response_shape": "mismo que list.items[0]",
-        "errores": {"400": "Monto excede saldo pendiente", "409": "Venta cancelada o reembolsada"}
+        "errores": {
+          "400": "Monto excede saldo pendiente",
+          "409": "Venta cancelada o reembolsada"
+        }
       },
       "by_sale": {
-        "method": "GET", "path": "/payments/by-sale/{sale_id}", "auth": "payments_read",
+        "method": "GET",
+        "path": "/payments/by-sale/{sale_id}",
+        "auth": "payments_view",
         "response_shape": "[list de PaymentResponse]"
       }
     },
-
     "cash_register": {
-      "_intro": "Caja registradora. Multi-caja: cada usuario puede tener 1 caja OPEN a la vez. Varios usuarios pueden tener cajas simultáneas. Al abrir se asigna nombre. Al cerrar calcula expected_cash = opening_amount + Σ cash payments del turno. discrepancy = closing_amount - expected. Si el módulo cash_register está habilitado en TenantConfig, ventas/órdenes/estaciones exigen caja abierta y atan su cash_register_id.",
+      "_intro": "Caja registradora. Las cajas físicas se definen una vez (POST /cash-registers/) y permanecen en el sistema. Al abrir, el cajero selecciona qué caja física usar (cash_register_id). Una caja física solo puede estar en uso por un usuario a la vez. Cada usuario puede tener máximo 1 sesión OPEN. Varios cajeros = varias cajas simultáneas. Al cerrar calcula expected_cash = opening_amount + Σ cash payments del turno. Si el módulo cash_register está habilitado en TenantConfig, estas operaciones exigen caja abierta: cerrar estación, entregar pedido, crear venta directa. NO requieren caja: abrir estación (mesero), crear pedido (mesero).",
       "current": {
-        "method": "GET", "path": "/cash-register/", "auth": "cash_register_read",
-        "response_shape": {"id": "int", "tenant_id": "int", "user_id": "int", "name": "string", "opening_amount": "float", "closing_amount": "float|null", "expected_cash": "float|null", "discrepancy": "float|null", "notes": "string|null", "status": "string (OPEN|CLOSED)", "opened_at": "ISO8601", "closed_at": "ISO8601|null"},
-        "frontend_notes": ["Retorna la caja abierta del usuario autenticado. null si no tiene ninguna abierta."]
+        "method": "GET",
+        "path": "/cash-register/",
+        "auth": "cash_register_view",
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "cash_register_id": "int",
+          "cash_register_name": "string|null",
+          "user_id": "int",
+          "opening_amount": "float",
+          "closing_amount": "float|null",
+          "expected_cash": "float|null",
+          "discrepancy": "float|null",
+          "notes": "string|null",
+          "status": "string (OPEN|CLOSED)",
+          "opened_at": "ISO8601",
+          "closed_at": "ISO8601|null"
+        },
+        "frontend_notes": [
+          "Retorna la sesión de caja abierta del usuario autenticado. null si no tiene ninguna abierta.",
+          "cash_register_id es el ID de la caja física (ver GET /cash-registers/)."
+        ]
       },
       "open": {
-        "method": "POST", "path": "/cash-register/open", "auth": "cash_register_manage",
-        "request_body": {"name": "string (1-100, default 'Caja principal')", "opening_amount": "float (>=0)"},
-        "errores": {"409": "Ya tienes una caja abierta. Ciérrala primero."},
-        "frontend_notes": ["1 caja por usuario, N cajas simultáneas por tenant (una por cada cajero)."]
+        "method": "POST",
+        "path": "/cash-register/open",
+        "auth": "cash_register_manage",
+        "request_body": {
+          "cash_register_id": "int (requerido, ID de la caja física)",
+          "opening_amount": "float (>=0)"
+        },
+        "errores": {
+          "409": "Esta caja registradora está inactiva",
+          "404": "Caja registradora no encontrada"
+        },
+        "frontend_notes": [
+          "1 caja por usuario, N cajas simultáneas por tenant.",
+          "El frontend debe obtener la lista de cajas disponibles con GET /cash-registers/ y mostrar un selector."
+        ]
       },
       "close": {
-        "method": "POST", "path": "/cash-register/close", "auth": "cash_register_manage",
-        "request_body": {"closing_amount": "float (>=0)", "notes": "string|null"},
-        "response_shape": "CashRegisterResponse (incluye expected_cash + discrepancy)",
-        "frontend_notes": ["Cierra la caja del usuario actual (no necesita ID)."]
+        "method": "POST",
+        "path": "/cash-register/close",
+        "auth": "cash_register_manage",
+        "request_body": {
+          "closing_amount": "float (>=0)",
+          "notes": "string|null"
+        },
+        "response_shape": "CashRegisterSessionResponse (incluye expected_cash + discrepancy + cash_register_name)",
+        "frontend_notes": [
+          "Cierra la caja del usuario actual (no necesita ID).",
+          "La caja física se libera y otro usuario puede abrirla."
+        ]
       },
       "history": {
-        "method": "GET", "path": "/cash-register/history", "auth": "cash_register_read",
-        "query": {"page": "int", "size": "int", "name": "string (ILIKE)", "status": "string (OPEN|CLOSED)"},
-        "response_shape": "PaginatedResponse[CashRegisterResponse]"
+        "method": "GET",
+        "path": "/cash-register/history",
+        "auth": "cash_register_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "status": "string (OPEN|CLOSED)"
+        },
+        "response_shape": "PaginatedResponse[CashRegisterSessionResponse]"
       }
     },
-
+    "cash_registers": {
+      "_intro": "Cajas registradoras físicas (activos fijos del negocio). Se crean una vez y permanecen. Cada sesión de caja (cash_register_sessions) referencia una de estas cajas. is_active=false oculta la caja sin borrarla (soft delete).",
+      "list": {
+        "method": "GET",
+        "path": "/cash-registers/",
+        "auth": "cash_register_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "name": "string (ILIKE)",
+          "is_active": "bool (=)"
+        },
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "name": "string",
+          "is_active": "bool",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        }
+      },
+      "create": {
+        "method": "POST",
+        "path": "/cash-registers/",
+        "auth": "cash_register_manage",
+        "request_body": {
+          "name": "string (1-100, requerido, ej: 'Caja 1')"
+        },
+        "response_shape": "CashRegisterResponse (201)"
+      },
+      "get_one": {
+        "method": "GET",
+        "path": "/cash-registers/{id}",
+        "auth": "cash_register_view",
+        "response_shape": "CashRegisterResponse"
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/cash-registers/{id}",
+        "auth": "cash_register_manage",
+        "request_body": {
+          "name": "string|null (1-100)",
+          "is_active": "bool|null"
+        }
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/cash-registers/{id}",
+        "auth": "cash_register_manage",
+        "response": "204 No Content (soft delete: marca is_active=false)",
+        "frontend_notes": [
+          "No borra el registro. is_active=false. Las sesiones históricas mantienen la FK."
+        ]
+      }
+    },
     "api_keys": {
       "_intro": "API Keys para integraciones externas. Se autentican con header X-Api-Key en lugar de Bearer token. Tienen permisos propios (subconjunto de PermissionCode). La raw_key solo se muestra al crear. Hasheada con SHA-256 en BD. Heredan el tenant_id con el que fueron creadas.",
       "list": {
-        "method": "GET", "path": "/api-keys/", "auth": "api_keys_read",
-        "query": {"page": "int", "size": "int", "name": "string (ILIKE)"},
-        "response_shape": {"id": "int", "tenant_id": "int", "name": "string", "key_prefix": "string (primeros 12 chars)", "permissions": ["string"], "is_active": "bool", "expires_at": "ISO8601|null", "last_used_at": "ISO8601|null", "created_by": "int", "created_at": "ISO8601", "updated_at": "ISO8601"}
+        "method": "GET",
+        "path": "/api-keys/",
+        "auth": "api_keys_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "name": "string (ILIKE)"
+        },
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "name": "string",
+          "key_prefix": "string (primeros 12 chars)",
+          "permissions": [
+            "string"
+          ],
+          "is_active": "bool",
+          "expires_at": "ISO8601|null",
+          "last_used_at": "ISO8601|null",
+          "created_by": "int",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        }
       },
       "create": {
-        "method": "POST", "path": "/api-keys/", "auth": "api_keys_manage",
-        "request_body": {"name": "string (1-200)", "permissions": ["string (PermissionCode)"], "expires_at": "ISO8601|null"},
+        "method": "POST",
+        "path": "/api-keys/",
+        "auth": "api_keys_manage",
+        "request_body": {
+          "name": "string (1-200)",
+          "permissions": [
+            "string (PermissionCode)"
+          ],
+          "expires_at": "ISO8601|null"
+        },
         "response_shape": "ApiKeyResponse + raw_key: string (51 chars, solo se muestra una vez)",
-        "frontend_notes": ["raw_key solo aparece en esta respuesta. Copiarla y guardarla. No se puede recuperar después.", "Formato: ak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx."]
+        "frontend_notes": [
+          "raw_key solo aparece en esta respuesta. Copiarla y guardarla. No se puede recuperar después.",
+          "Formato: ak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx."
+        ]
       },
-      "get_one": {"method": "GET", "path": "/api-keys/{id}", "auth": "api_keys_read", "response_shape": "ApiKeyResponse (sin raw_key)"},
+      "get_one": {
+        "method": "GET",
+        "path": "/api-keys/{id}",
+        "auth": "api_keys_view",
+        "response_shape": "ApiKeyResponse (sin raw_key)"
+      },
       "update": {
-        "method": "PUT", "path": "/api-keys/{id}", "auth": "api_keys_manage",
-        "request_body": {"name": "string|null (1-200)", "permissions": "list[string]|null", "is_active": "bool|null"}
+        "method": "PUT",
+        "path": "/api-keys/{id}",
+        "auth": "api_keys_manage",
+        "request_body": {
+          "name": "string|null (1-200)",
+          "permissions": "list[string]|null",
+          "is_active": "bool|null"
+        }
       },
-      "delete": {"method": "DELETE", "path": "/api-keys/{id}", "auth": "api_keys_manage", "response": "204 No Content"}
+      "delete": {
+        "method": "DELETE",
+        "path": "/api-keys/{id}",
+        "auth": "api_keys_manage",
+        "response": "204 No Content"
+      }
     },
-
     "tenant_config": {
       "_intro": "Configuración de módulos habilitados por tenant. Útil para deshabilitar módulos que una empresa no necesita (ej: estaciones, caja). Si un módulo no está en la lista, el frontend debe ocultarlo y la API rechazará operaciones con 403 (require_module) o 409 (require_cash_register).",
       "get": {
-        "method": "GET", "path": "/tenant-config/{tenant_id}", "auth": "tenant_config_read",
-        "response_shape": {"id": "int", "tenant_id": "int", "modules_enabled": ["string (ver lista abajo)"], "created_at": "ISO8601", "updated_at": "ISO8601"},
-        "frontend_notes": ["Si no existe config para el tenant, se crea automáticamente con TODOS los módulos habilitados."]
+        "method": "GET",
+        "path": "/tenant-config/{tenant_id}",
+        "auth": "tenant_config_view",
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "modules_enabled": [
+            "string (ver lista abajo)"
+          ],
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "Si no existe config para el tenant, se crea automáticamente con TODOS los módulos habilitados."
+        ]
       },
       "update": {
-        "method": "PUT", "path": "/tenant-config/{tenant_id}", "auth": "tenant_config_manage",
-        "request_body": {"modules_enabled": ["string (min 1, solo módulos válidos)"]},
-        "errores": {"400": "Módulo no válido: <nombre>"},
-        "frontend_notes": ["Módulos disponibles: products, shelves, categories, sales, orders, stations, cash_register, taxes, customers, payments"]
+        "method": "PUT",
+        "path": "/tenant-config/{tenant_id}",
+        "auth": "tenant_config_manage",
+        "request_body": {
+          "modules_enabled": [
+            "string (min 1, solo módulos válidos)"
+          ]
+        },
+        "errores": {
+          "400": "Módulo no válido: <nombre>"
+        },
+        "frontend_notes": [
+          "Módulos disponibles: products, shelves, categories, sales, orders, stations, cash_register, taxes, customers, payments"
+        ]
       }
     },
-
+    "invoice_templates": {
+      "_intro": "Plantillas HTML de factura editables por tenant. Cada tenant tiene UNA plantilla que se crea automáticamente al primer acceso (template default con diseño base). El HTML usa placeholders Jinja2 {{ variable }} para insertar datos de la venta/cliente/tenant. El frontend puede editarlo en un editor de código HTML y previsualizarlo antes de guardar.",
+      "get_template": {
+        "method": "GET",
+        "path": "/invoice-templates/",
+        "auth": "invoice_templates_view",
+        "response_shape": {
+          "id": "int",
+          "tenant_id": "int",
+          "html_content": "string (HTML completo con placeholders {{ }})",
+          "updated_at": "ISO8601"
+        },
+        "frontend_notes": [
+          "Si no existe, se crea automáticamente con un template default funcional (lazy-create).",
+          "html_content es el HTML crudo que se renderiza con datos reales al generar una factura.",
+          "Usar un editor de código HTML (Monaco, CodeMirror) para editar. No usar editor WYSIWYG (rompe placeholders)."
+        ]
+      },
+      "update_template": {
+        "method": "PUT",
+        "path": "/invoice-templates/",
+        "auth": "invoice_templates_manage",
+        "request_body": {
+          "html_content": "string (1-200000 chars, HTML con placeholders Jinja2)"
+        },
+        "response_shape": "InvoiceTemplateResponse",
+        "errores": {
+          "400": "Error de sintaxis Jinja2: <detalle>"
+        },
+        "frontend_notes": [
+          "Valida sintaxis Jinja2 al guardar (no al renderizar). Si tiene errores de sintaxis, rechaza con 400.",
+          "El HTML puede incluir CSS @media print para controlar cómo se ve al imprimir.",
+          "Variables disponibles: tenant_name, tenant_slug, tenant_business_id, tenant_logo_url, invoice_number, invoice_date, invoice_date_short, status, payment_status, notes, customer_name, customer_document, customer_email, customer_phone, customer_address, items (loop), payments (loop), subtotal, tax_total, total, auto_print"
+        ]
+      },
+      "get_variables": {
+        "method": "GET",
+        "path": "/invoice-templates/variables",
+        "auth": "invoice_templates_view",
+        "response_shape": [
+          {
+            "name": "string (ej: 'tenant_name')",
+            "description": "string (ej: 'Nombre del negocio')",
+            "category": "string (tenant|sale|customer|items|payments|meta)"
+          }
+        ],
+        "frontend_notes": [
+          "Usar para construir autocomplete/lista de variables en el editor de plantillas.",
+          "items usa {% for item in items %} ... {% endfor %} (Jinja2 loop).",
+          "payments usa {% for payment in payments %} ... {% endfor %}.",
+          "Las variables de items son: item.product_name, item.quantity, item.unit_price, item.subtotal, item.tax_amount.",
+          "Las variables de payments son: payment.method (CASH|CARD|TRANSFER|WALLET|OTHER), payment.amount, payment.reference."
+        ]
+      },
+      "preview": {
+        "method": "POST",
+        "path": "/invoice-templates/preview",
+        "auth": "invoice_templates_view",
+        "request_body": {
+          "sale_id": "int|null (si se envía, renderiza con datos reales de esa venta; si no, usa datos dummy)"
+        },
+        "response": "text/html — HTML renderizado con la plantilla + datos dummy o reales",
+        "frontend_notes": [
+          "Si no se envía sale_id, usa datos ficticios (Mi Negocio Demo, Cliente Ejemplo, productos A y B).",
+          "Usar para mostrar preview en un iframe antes de guardar cambios.",
+          "El HTML retornado incluye CSS @media screen (centrado, sombra, botón Imprimir)."
+        ]
+      }
+    },
     "stations": {
       "_intro": "Puntos de servicio genéricos. Aplica a mesas de restaurante, habitaciones de hotel, terminales de bar, mostrador retail, delivery. Una estación puede tener máximo 1 sesión OPEN. Los items pasan por estados CREATED→PREPARING→READY→DELIVERED. Al close se crea una Sale con impuestos (stock se descuenta en ese momento, no al agregar items). DELETE item solo cambia status a CANCELLED (no borra). Transfer mueve sesión completa a otra estación.",
-
       "list": {
-        "method": "GET", "path": "/stations/", "auth": "stations_read",
-        "query": {"page": "int", "size": "int", "code": "string (ILIKE)", "name": "string (ILIKE)", "area": "string (ILIKE)", "status": "string (AVAILABLE|OCCUPIED|RESERVED|MAINTENANCE)"},
-        "response_shape": {"id": "int", "code": "string", "name": "string|null", "area": "string|null", "capacity": "int", "status": "string", "created_at": "ISO8601", "updated_at": "ISO8601"}
+        "method": "GET",
+        "path": "/stations/",
+        "auth": "stations_view",
+        "query": {
+          "page": "int",
+          "size": "int",
+          "code": "string (ILIKE)",
+          "name": "string (ILIKE)",
+          "area": "string (ILIKE)",
+          "status": "string (AVAILABLE|OCCUPIED|RESERVED|MAINTENANCE)"
+        },
+        "response_shape": {
+          "id": "int",
+          "code": "string",
+          "name": "string|null",
+          "area": "string|null",
+          "capacity": "int",
+          "status": "string",
+          "created_at": "ISO8601",
+          "updated_at": "ISO8601"
+        }
       },
-
       "create": {
-        "method": "POST", "path": "/stations/", "auth": "stations_manage",
-        "request_body": {"code": "string (1-50, único por tenant)", "name": "string|null", "area": "string|null (ej: 'SALON', 'BAR', 'HABITACIONES')", "capacity": "int (>=1, default 1)"},
+        "method": "POST",
+        "path": "/stations/",
+        "auth": "stations_manage",
+        "request_body": {
+          "code": "string (1-50, único por tenant)",
+          "name": "string|null",
+          "area": "string|null (ej: 'SALON', 'BAR', 'HABITACIONES')",
+          "capacity": "int (>=1, default 1)"
+        },
         "response_shape": "StationResponse (201)",
-        "errores": {"409": "El código de estación ya existe"}
+        "errores": {
+          "409": "El código de estación ya existe"
+        }
       },
-
       "get_detail": {
-        "method": "GET", "path": "/stations/{id}", "auth": "stations_read",
+        "method": "GET",
+        "path": "/stations/{id}",
+        "auth": "stations_view",
         "response_shape": "StationDetailResponse: StationResponse + active_session: StationSessionResponse|null (null si no hay sesión abierta)"
       },
-
       "update": {
-        "method": "PUT", "path": "/stations/{id}", "auth": "stations_manage",
+        "method": "PUT",
+        "path": "/stations/{id}",
+        "auth": "stations_manage",
         "request_body": "Todos opcionales: code, name, area, capacity, status"
       },
-
       "delete": {
-        "method": "DELETE", "path": "/stations/{id}", "auth": "stations_manage",
-        "errores": {"409": "No se puede eliminar una estación con sesión abierta"}
+        "method": "DELETE",
+        "path": "/stations/{id}",
+        "auth": "stations_manage",
+        "errores": {
+          "409": "No se puede eliminar una estación con sesión abierta"
+        }
       },
-
       "open": {
-        "method": "POST", "path": "/stations/{id}/open", "auth": "stations_manage",
-        "request_body": {"customer_name": "string (default 'Cliente mostrador')", "customer_email": "string|null", "customer_phone": "string|null", "customer_document": "string|null", "customer_address": "string|null"},
+        "method": "POST",
+        "path": "/stations/{id}/open",
+        "auth": "stations_manage",
+        "request_body": {
+          "customer_name": "string (default 'Cliente mostrador')",
+          "customer_email": "string|null",
+          "customer_phone": "string|null",
+          "customer_document": "string|null",
+          "customer_address": "string|null"
+        },
         "response_shape": "StationSessionResponse {id, station_id, customer_id|null, customer_name, total, status: 'OPEN', sale_id|null, cash_register_id:int|null, created_by, opened_at, closed_at|null, items: []}",
-        "errores": {"409": "Estación ya tiene sesión abierta o está en mantenimiento"},
-        "frontend_notes": ["Abre sesión y cambia station.status a OCCUPIED automáticamente.", "Si módulo caja habilitado, guarda cash_register_id del usuario que abre la sesión."]
+        "errores": {
+          "409": "Estación ya tiene sesión abierta o está en mantenimiento"
+        },
+        "frontend_notes": [
+          "Abre sesión y cambia station.status a OCCUPIED automáticamente.",
+          "NO requiere caja abierta. El mesero puede abrir mesas sin caja.",
+          "cash_register_id de la sesión será null al abrir. Se asigna al cerrar con la caja del cajero que cobra."
+        ]
       },
-
       "close": {
-        "method": "POST", "path": "/stations/{id}/close", "auth": "stations_manage",
+        "method": "POST",
+        "path": "/stations/{id}/close",
+        "auth": "stations_manage",
         "response_shape": "StationSessionResponse (status: CLOSED, sale_id lleno, total calculado)",
-        "frontend_notes": ["Crea Sale con items no cancelados (incluye impuestos). Descuenta stock. station.status → AVAILABLE."]
+        "errores": {
+          "409": "Debe abrir una caja primero (si el módulo cash_register está habilitado y el usuario no tiene caja abierta)"
+        },
+        "frontend_notes": [
+          "Requiere caja abierta. Crea Sale con items no cancelados (incluye impuestos). Descuenta stock. station.status → AVAILABLE.",
+          "La venta se registra bajo cash_register_id del cajero que cierra, no del que abrió la sesión."
+        ]
       },
-
       "cancel_session": {
-        "method": "POST", "path": "/stations/{id}/cancel", "auth": "stations_manage",
+        "method": "POST",
+        "path": "/stations/{id}/cancel",
+        "auth": "stations_manage",
         "response_shape": "StationSessionResponse (status: CANCELLED)",
-        "frontend_notes": ["Cancela sin cobrar. station.status → AVAILABLE."]
+        "frontend_notes": [
+          "Cancela sin cobrar. station.status → AVAILABLE."
+        ]
       },
-
       "get_items": {
-        "method": "GET", "path": "/stations/{id}/items", "auth": "stations_read",
+        "method": "GET",
+        "path": "/stations/{id}/items",
+        "auth": "stations_view",
         "response_shape": "[SessionItemResponse {id, session_id, product_id, product_name, quantity, unit_price, subtotal, status, notes|null}]"
       },
-
       "add_items": {
-        "method": "POST", "path": "/stations/{id}/items", "auth": "stations_manage",
-        "request_body": {"items": [{"product_id": "int", "quantity": "int (>=1)", "notes": "string|null"}]},
+        "method": "POST",
+        "path": "/stations/{id}/items",
+        "auth": "stations_manage",
+        "request_body": {
+          "items": [
+            {
+              "product_id": "int",
+              "quantity": "int (>=1)",
+              "notes": "string|null"
+            }
+          ]
+        },
         "response_shape": "[SessionItemResponse] (201, status=CREATED)",
-        "errores": {"404": "Producto no encontrado o no hay sesión abierta"},
-        "frontend_notes": ["unit_price es snapshot del precio del producto al momento de agregar. Cambios de precio posteriores no afectan."]
+        "errores": {
+          "404": "Producto no encontrado o no hay sesión abierta"
+        },
+        "frontend_notes": [
+          "unit_price es snapshot del precio del producto al momento de agregar. Cambios de precio posteriores no afectan."
+        ]
       },
-
       "update_item": {
-        "method": "PUT", "path": "/stations/{id}/items/{item_id}", "auth": "stations_manage",
-        "request_body": {"quantity": "int|null (>=1, opcional)", "notes": "string|null"},
-        "errores": {"409": "Solo se pueden modificar ítems en estado CREATED"}
+        "method": "PUT",
+        "path": "/stations/{id}/items/{item_id}",
+        "auth": "stations_manage",
+        "request_body": {
+          "quantity": "int|null (>=1, opcional)",
+          "notes": "string|null"
+        },
+        "errores": {
+          "409": "Solo se pueden modificar ítems en estado CREATED"
+        }
       },
-
       "cancel_item": {
-        "method": "DELETE", "path": "/stations/{id}/items/{item_id}", "auth": "stations_manage",
-        "frontend_notes": ["No borra el registro. Cambia status a CANCELLED (trazabilidad: 'el cliente pidió, luego canceló')."]
+        "method": "DELETE",
+        "path": "/stations/{id}/items/{item_id}",
+        "auth": "stations_manage",
+        "frontend_notes": [
+          "No borra el registro. Cambia status a CANCELLED (trazabilidad: 'el cliente pidió, luego canceló')."
+        ]
       },
-
-      "prepare_item": {"method": "POST", "path": "/stations/{id}/items/{item_id}/prepare", "auth": "stations_manage"},
-      "ready_item": {"method": "POST", "path": "/stations/{id}/items/{item_id}/ready", "auth": "stations_manage"},
-      "deliver_item": {"method": "POST", "path": "/stations/{id}/items/{item_id}/deliver", "auth": "stations_manage"},
-
+      "prepare_item": {
+        "method": "POST",
+        "path": "/stations/{id}/items/{item_id}/prepare",
+        "auth": "stations_manage"
+      },
+      "ready_item": {
+        "method": "POST",
+        "path": "/stations/{id}/items/{item_id}/ready",
+        "auth": "stations_manage"
+      },
+      "deliver_item": {
+        "method": "POST",
+        "path": "/stations/{id}/items/{item_id}/deliver",
+        "auth": "stations_manage"
+      },
       "transfer": {
-        "method": "POST", "path": "/stations/{id}/transfer/{target_id}", "auth": "stations_manage",
-        "errores": {"404": "Estación origen/destino no encontrada", "409": "Destino no disponible o ya tiene sesión"},
-        "frontend_notes": ["Mueve sesión completa. Origen→AVAILABLE, destino→OCCUPIED."]
+        "method": "POST",
+        "path": "/stations/{id}/transfer/{target_id}",
+        "auth": "stations_manage",
+        "errores": {
+          "404": "Estación origen/destino no encontrada",
+          "409": "Destino no disponible o ya tiene sesión"
+        },
+        "frontend_notes": [
+          "Mueve sesión completa. Origen→AVAILABLE, destino→OCCUPIED."
+        ]
       }
     },
-
     "flujo_frontend_pos": {
       "flujo_apertura_caja": [
-        "0. Cajero: POST /cash-register/open {name: 'Caja 1', opening_amount: 5000} → caja OPEN",
-        "1. Todas las ventas/órdenes/estaciones siguientes se atan automáticamente a esta caja",
-        "2. Al final del turno: POST /cash-register/close → expected_cash + discrepancy"
+        "0. Admin: POST /cash-registers/ {name:'Caja 1'} → define cajas físicas (una vez)",
+        "1. Cajero: POST /cash-register/open {cash_register_id:1, opening_amount:5000} → selecciona Caja 1 y la abre",
+        "2. Operaciones que atan automáticamente a esta caja: cerrar estación, entregar pedido, crear venta directa",
+        "3. Operaciones que NO requieren caja: abrir estación (mesero), crear pedido (mesero), agregar items",
+        "4. Cajero cierra caja: POST /cash-register/close → Caja 1 se libera, otro usuario puede usarla",
+        "5. Al final del turno: POST /cash-register/close → expected_cash + discrepancy"
       ],
       "flujo_mesa_restaurante": [
-        "1. Mesero: POST /stations/MESA-01/open (abre mesa)",
+        "1. Mesero: POST /stations/MESA-01/open (abre mesa, no requiere caja)",
         "2. Escanea/busca producto: GET /products/by-barcode/7791234567890 → {id, name, price, taxes, stock, image_url}",
         "3. Agrega items: POST /stations/MESA-01/items {items: [{product_id:5, qty:2, notes:'sin sal'}]}",
-        "4. Repite 2-3 para más productos",
+        "4. Repite 2-3 para más productos (mesero no necesita caja para nada de esto)",
         "5. Cocina: POST .../prepare → CREATED→PREPARING, /ready, /deliver",
-        "6. Cobrar: POST /stations/MESA-01/close → crea Sale con taxes, station→AVAILABLE",
-        "7. Registrar pago: POST /payments {sale_id, method:'CASH', amount:total}"
+        "6. Cajero abre caja: POST /cash-register/open {name:'Caja 1', opening_amount:5000}",
+        "7. Cajero cobra: POST /stations/MESA-01/close → crea Sale bajo su caja, station→AVAILABLE",
+        "8. Cajero registra pago: POST /payments {sale_id, method:'CASH', amount:total}",
+        "9. Cajero cierra caja al final del turno: POST /cash-register/close"
       ],
       "flujo_pos_retail": [
-        "1. Cajero: POST /stations/POS-01/open",
+        "0. Cajero: POST /cash-register/open (abre caja, requerido para cobrar)",
+        "1. Cajero: POST /stations/POS-01/open (abre estación)",
         "2. Escanea: GET /products/by-barcode/{code}",
         "3. Agrega: POST /stations/POS-01/items",
-        "4. Cobrar: POST /stations/POS-01/close → crea Sale",
-        "5. Registrar pago: POST /payments"
+        "4. Cobrar: POST /stations/POS-01/close → crea Sale bajo su caja",
+        "5. Registrar pago: POST /payments",
+        "6. Cajero cierra caja al final del turno: POST /cash-register/close"
+      ],
+      "flujo_imprimir_factura": [
+        "1. GET /invoice-templates/ → obtener HTML actual del tenant (opcional, si se quiere mostrar antes)",
+        "2. GET /invoice-templates/variables → obtener lista de {{ variables }} disponibles (para editor)",
+        "3. Opción A (imprimir rápido, sin servicio externo): GET /sales/{id}/invoice/html?auto_print=true → abre pestaña, imprime automáticamente",
+        "4. Opción B (descargar PDF): GET /sales/{id}/invoice/pdf → descarga archivo PDF (usa caché, ?regenerate=1 para regenerar)",
+        "5. Editor de plantilla: PUT /invoice-templates/ con html_content editado → guarda. POST /invoice-templates/preview → previsualiza"
+      ],
+      "flujo_editar_pedido": [
+        "0. Mesero: POST /orders/ (crea pedido, no requiere caja)",
+        "1. GET /orders/{id} → ver detalle del pedido",
+        "2. PUT /orders/{id} → enviar solo campos a modificar (cliente, notas, items)",
+        "3. Si se envían items, se validan stock de nuevo",
+        "4. Solo funciona si status != DELIVERED",
+        "5. Cajero: POST /orders/{id}/deliver (requiere caja abierta) → crea venta bajo su caja"
       ]
     },
-
     "flujo_frontend_tipico": {
-    "buscar_producto_por_nombre_parcial": [
-      "1. Input de búsqueda en frontend: usuario escribe 'mart'",
-      "2. GET /products/?name=mart → devuelve 'Martillo grande' (ILIKE parcial)",
-      "3. Funciona con mayúsculas, minúsculas, substrings en cualquier posición"
-    ],
-    "crear_producto_con_imagen": [
-      "1. POST /products/ con datos básicos → obtienes product.id",
-      "2. POST /products/{id}/image con FormData (campo 'file') → obtienes image_url",
-      "3. Mostrar imagen: <img src='{base_url}{image_url}' />"
-    ],
-    "asignar_producto_a_estanteria": [
-      "1. GET /shelves/ para elegir estantería destino",
-      "2. POST /shelves/{id}/items con {product_id, quantity}",
-      "3. Si el producto ya está en la estantería → se suma la cantidad (upsert), no hay error 409",
-      "4. Si 400 → mostrar errores de capacidad/volumen/stock al usuario",
-      "5. Si 201 → el producto está asignado"
-    ],
-    "escanear_qr_para_ubicar_producto": [
-      "1. GET /products/{id}/qr → obtienes JSON con shelf info",
-      "2. Renderizas QR code con ese JSON en el frontend",
-      "3. Al escanear: muestras aisle, row, level (ej: 'Pasillo A, Fila 1, Nivel 3')"
-    ],
-    "dashboard_estanteria": [
-      "1. GET /shelves/{id} → obtienes items + current_weight_kg + current_volume_cm3",
-      "2. Muestras barra de capacidad: current_weight / max_weight",
-      "3. Muestras volumen ocupado vs capacidad: current_volume / shelf_volume",
-      "4. Lista de items cliqueables → navegan a GET /products/{product_id}"
-    ]
-  }
-},
-
+      "buscar_producto_por_nombre_parcial": [
+        "1. Input de búsqueda en frontend: usuario escribe 'mart'",
+        "2. GET /products/?name=mart → devuelve 'Martillo grande' (ILIKE parcial)",
+        "3. Funciona con mayúsculas, minúsculas, substrings en cualquier posición"
+      ],
+      "crear_producto_con_imagen": [
+        "1. POST /products/ con datos básicos → obtienes product.id",
+        "2. POST /products/{id}/image con FormData (campo 'file') → obtienes image_url",
+        "3. Mostrar imagen: <img src='{base_url}{image_url}' />"
+      ],
+      "asignar_producto_a_estanteria": [
+        "1. GET /shelves/ para elegir estantería destino",
+        "2. POST /shelves/{id}/items con {product_id, quantity}",
+        "3. Si el producto ya está en la estantería → se suma la cantidad (upsert), no hay error 409",
+        "4. Si 400 → mostrar errores de capacidad/volumen/stock al usuario",
+        "5. Si 201 → el producto está asignado"
+      ],
+      "escanear_qr_para_ubicar_producto": [
+        "1. GET /products/{id}/qr → obtienes JSON con shelf info",
+        "2. Renderizas QR code con ese JSON en el frontend",
+        "3. Al escanear: muestras aisle, row, level (ej: 'Pasillo A, Fila 1, Nivel 3')"
+      ],
+      "dashboard_estanteria": [
+        "1. GET /shelves/{id} → obtienes items + current_weight_kg + current_volume_cm3",
+        "2. Muestras barra de capacidad: current_weight / max_weight",
+        "3. Muestras volumen ocupado vs capacidad: current_volume / shelf_volume",
+        "4. Lista de items cliqueables → navegan a GET /products/{product_id}"
+      ]
+    }
+  },
   "permisos_frontend": {
     "_como_usar": "Decodificar JWT en frontend. El endpoint GET /auth/me devuelve la lista de permisos del usuario.",
-    "_multitenant": "Si el usuario es platform admin (is_super_admin=true) sin tenant, tiene acceso a todo. Si es platform admin con X-Tenant header, sus permisos se evalúan dentro de ese tenant. Usuarios normales tienen permisos dentro de su tenant.",
+    "_multitenant": "Control de acceso a módulos: si el usuario no tiene NINGÚN permiso que empiece con el nombre del módulo (ej: 'stations_'), el módulo no se muestra en la UI.",
+    "_convencion": "{modulo}_{accion} donde accion es view|create|edit|delete|upload_image|assign_products|open_close|manage_items|change_state|cancel|view_invoice|assign_roles|set_pin|assign_permissions|manage_registers",
     "mapeo_rutas": {
+      "products_view": "mostrar lista, detalle, QR y barcode de productos",
       "products_create": "mostrar botón 'Nuevo Producto'",
-      "products_read": "mostrar lista de productos, ver detalle",
-      "products_update": "mostrar botón 'Editar', subir/bajar imagen",
-      "products_delete": "mostrar botón 'Eliminar'",
+      "products_edit": "mostrar botón 'Editar Producto'",
+      "products_delete": "mostrar botón 'Eliminar Producto'",
+      "products_upload_image": "mostrar botón subir/bajar imagen de producto",
+      "shelves_view": "mostrar lista y detalle de estanterías",
       "shelves_create": "mostrar botón 'Nueva Estantería'",
-      "shelves_read": "mostrar lista de estanterías, ver detalle",
-      "shelves_update": "mostrar botón 'Editar', asignar/quitar productos",
-      "shelves_delete": "mostrar botón 'Eliminar estantería'",
+      "shelves_edit": "mostrar botón 'Editar Estantería'",
+      "shelves_delete": "mostrar botón 'Eliminar Estantería'",
+      "shelves_assign_products": "mostrar botones asignar/quitar/editar items",
+      "categories_view": "mostrar lista de categorías",
       "categories_create": "mostrar botón 'Nueva Categoría'",
-      "categories_read": "mostrar lista de categorías, ver detalle",
-      "categories_update": "mostrar botón 'Editar categoría'",
-      "categories_delete": "mostrar botón 'Eliminar categoría'",
+      "categories_edit": "mostrar botón 'Editar Categoría'",
+      "categories_delete": "mostrar botón 'Eliminar Categoría'",
+      "sales_view": "mostrar lista, detalle y recibo de ventas",
       "sales_create": "mostrar botón 'Nueva Venta'",
-      "sales_read": "mostrar lista de ventas, ver detalle",
       "sales_cancel": "mostrar botón 'Anular Venta'",
+      "sales_view_invoice": "mostrar botón ver factura HTML/PDF",
+      "orders_view": "mostrar lista y detalle de pedidos",
       "orders_create": "mostrar botón 'Nuevo Pedido'",
-      "orders_read": "mostrar lista de pedidos, ver detalle",
-      "orders_manage": "mostrar botones de transición (Preparar, Listo, Entregar)",
-      "users_manage": "mostrar sección Admin → Usuarios",
-      "roles_manage": "mostrar sección Admin → Roles",
-      "events_read": "mostrar sección Auditoría",
-      "tenants_manage": "mostrar sección Admin → Tenants (solo platform admin)",
-      "taxes_read": "mostrar lista de impuestos",
-      "taxes_manage": "mostrar botones 'Nuevo Impuesto', 'Editar', 'Eliminar'",
-      "customers_read": "mostrar lista de clientes",
-      "customers_manage": "mostrar botones 'Nuevo Cliente', 'Editar'",
-      "payments_read": "mostrar lista de pagos",
-      "payments_manage": "mostrar botón 'Registrar Pago'",
-      "stations_read": "mostrar sección Estaciones",
-      "stations_manage": "mostrar botones CRUD estaciones, abrir/cerrar, agregar items",
-      "cash_register_read": "mostrar estado de caja",
-      "cash_register_manage": "mostrar botones Abrir/Cerrar Caja",
-      "api_keys_read": "mostrar lista de API Keys",
-      "api_keys_manage": "mostrar botones CRUD API Keys",
-      "tenant_config_read": "mostrar config de módulos del tenant",
-      "tenant_config_manage": "mostrar toggle de módulos habilitados"
+      "orders_edit": "mostrar botones prepare/ready/deliver",
+      "stations_create": "mostrar botón 'Nueva Estación'",
+      "stations_edit": "mostrar botón 'Editar Estación'",
+      "stations_delete": "mostrar botón 'Eliminar Estación'",
+      "stations_open_close": "mostrar botones abrir/cerrar/cancelar/transferir sesión",
+      "stations_manage_items": "mostrar botones agregar/editar/cancelar/transicionar items",
+      "cash_register_view": "mostrar estado de caja, historial y cajas físicas",
+      "cash_register_open_close": "mostrar botones Abrir/Cerrar sesión de caja",
+      "cash_register_manage_registers": "mostrar botones CRUD de cajas físicas",
+      "taxes_view": "mostrar lista de impuestos",
+      "taxes_create": "mostrar botón 'Nuevo Impuesto'",
+      "taxes_edit": "mostrar botón 'Editar Impuesto'",
+      "taxes_delete": "mostrar botón 'Eliminar Impuesto'",
+      "customers_view": "mostrar lista de clientes",
+      "customers_create": "mostrar botón 'Nuevo Cliente'",
+      "customers_edit": "mostrar botón 'Editar Cliente'",
+      "payments_view": "mostrar lista de pagos",
+      "payments_create": "mostrar botón 'Registrar Pago'",
+      "users_view": "mostrar lista y detalle de usuarios",
+      "users_create": "mostrar botón 'Nuevo Usuario'",
+      "users_edit": "mostrar botón 'Editar Usuario'",
+      "users_delete": "mostrar botón 'Eliminar Usuario'",
+      "users_assign_roles": "mostrar botón asignar/quitar roles",
+      "users_set_pin": "mostrar botón configurar PIN",
+      "users_upload_image": "mostrar botón subir/bajar avatar",
+      "roles_view": "mostrar lista y permisos de roles",
+      "roles_create": "mostrar botón 'Nuevo Rol'",
+      "roles_edit": "mostrar botón 'Editar Rol'",
+      "roles_delete": "mostrar botón 'Eliminar Rol'",
+      "roles_assign_permissions": "mostrar botón asignar/quitar permisos a rol",
+      "tenants_view": "mostrar lista y detalle de tenants",
+      "tenants_create": "mostrar botón 'Nuevo Tenant'",
+      "tenants_edit": "mostrar botón 'Editar Tenant'",
+      "tenants_delete": "mostrar botón 'Eliminar Tenant'",
+      "events_view": "mostrar sección Auditoría",
+      "api_keys_view": "mostrar lista de API Keys",
+      "api_keys_create": "mostrar botón 'Nueva API Key'",
+      "api_keys_edit": "mostrar botón 'Editar API Key'",
+      "api_keys_delete": "mostrar botón 'Eliminar API Key'",
+      "tenant_config_view": "mostrar config de módulos del tenant",
+      "tenant_config_edit": "mostrar toggle de módulos habilitados",
+      "invoice_templates_view": "mostrar editor y preview de plantilla",
+      "invoice_templates_edit": "mostrar botón Guardar en editor de plantilla"
     },
     "roles_default": {
-      "Admin": "products_create/read/update/delete, events_read, roles_manage, users_manage, shelves_create/read/update/delete, categories_create/read/update/delete, sales_create/read/cancel, orders_create/read/manage, taxes_read/manage, customers_read/manage, payments_read/manage, stations_read/manage, cash_register_read/manage, api_keys_read/manage, tenant_config_read/manage",
-      "Operator": "products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage, api_keys_read, tenant_config_read",
-      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read, api_keys_read, tenant_config_read"
+      "Admin": "products_view/create/edit/delete/upload_image, shelves_view/create/edit/delete/assign_products, categories_view/create/edit/delete, sales_view/create/cancel/view_invoice, orders_view/create/edit/change_state, stations_view/create/edit/delete/open_close/manage_items, cash_register_view/open_close/manage_registers, taxes_view/create/edit/delete, customers_view/create/edit, payments_view/create, users_view/create/edit/delete/assign_roles/set_pin/upload_image, roles_view/create/edit/delete/assign_permissions, tenants_view/create/edit/delete, events_view, api_keys_view/create/edit/delete, tenant_config_view/edit, invoice_templates_view/edit",
+      "Operator": "products_view/create/edit, shelves_view/edit/assign_products, categories_view, sales_view/create/cancel, orders_view/create/edit/change_state, stations_view/open_close/manage_items, cash_register_view/open_close, taxes_view, customers_view/create, payments_view/create, users_view, roles_view, api_keys_view, tenant_config_view, invoice_templates_view",
+      "Viewer": "products_view, shelves_view, categories_view, sales_view, orders_view, stations_view, cash_register_view, taxes_view, customers_view, payments_view, users_view, roles_view, events_view, api_keys_view, tenant_config_view, invoice_templates_view",
+      "Waiter": "stations_view/open_close/manage_items, orders_view/create/edit, products_view, customers_view, sales_view",
+      "Cashier": "cash_register_view/open_close, stations_view/open_close, sales_view/create/cancel/view_invoice, payments_view/create, orders_view/change_state, products_view, customers_view/create"
     }
   }
 }

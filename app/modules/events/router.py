@@ -23,7 +23,7 @@ async def list_events(
     pag: dict = PaginationParams,
     filters: dict = FilterParams,
     service: EventService = Depends(get_event_service),
-    _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
+    _perm: User = Depends(require_permission(PermissionCode.EVENTS_VIEW)),
 ) -> PaginatedResponse[EventResponse]:
     return await service.get_all(page=pag["page"], size=pag["size"], filters=filters or None)
 
@@ -32,7 +32,7 @@ async def list_events(
 async def retrieve_event(
     event_id: int,
     service: EventService = Depends(get_event_service),
-    _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
+    _perm: User = Depends(require_permission(PermissionCode.EVENTS_VIEW)),
 ) -> EventResponse:
     event = await service.get_by_id(event_id)
     if not event:
@@ -49,6 +49,6 @@ async def list_entity_events(
     entity_id: int,
     pag: dict = PaginationParams,
     service: EventService = Depends(get_event_service),
-    _perm: User = Depends(require_permission(PermissionCode.EVENTS_READ)),
+    _perm: User = Depends(require_permission(PermissionCode.EVENTS_VIEW)),
 ) -> PaginatedResponse[EventResponse]:
     return await service.get_by_entity(entity_type, entity_id, page=pag["page"], size=pag["size"])

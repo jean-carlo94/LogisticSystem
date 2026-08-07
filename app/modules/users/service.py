@@ -166,6 +166,12 @@ class UserService:
             raise ValidationException("Usuario y rol deben pertenecer al mismo tenant")
         await self.repo.assign_role(user_id, role_id)
 
+    async def remove_role(self, user_id: int, role_id: int) -> None:
+        user = await self.repo.get_by_id(user_id)
+        if not user:
+            raise NotFoundException("Usuario no encontrado")
+        await self.repo.remove_role(user_id, role_id)
+
     async def get_profile(self, user: User) -> UserProfileResponse:
         roles = await self.repo.get_user_roles(user.id)
         permissions = await self.repo.get_user_permissions(user.id, user.is_super_admin)

@@ -9,7 +9,7 @@ from app.core.tenant import current_tenant_id
 from app.modules.orders.model import Order, OrderStatus
 from app.modules.orders.repository import OrderItemRepository, OrderRepository
 from app.modules.orders.schema import (
-    OrderCreate, OrderDetailResponse, OrderItemResponse,
+    OrderCreate, OrderDetailResponse, OrderItemCreate, OrderItemResponse, OrderUpdate,
 )
 from app.modules.shelves.repository import ShelfItemRepository
 
@@ -57,46 +57,11 @@ class OrderService:
         if current_tenant_id.get() is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
-        product_ids = [i.product_id for i in data.items]
-        products = await self.shelf_item_repo.get_products_by_ids(product_ids)
-        products_map = {p.id: p for p in products}
+        products_map, shelf_items_map = await self._validate_items(data.items)
 
-        shelf_ids = [i.shelf_id for i in data.items if i.shelf_id is not None]
-        shelf_items_map = {}
-        if shelf_ids:
-            shelf_items = await self.shelf_item_repo.get_items_by_product_ids(product_ids)
-            shelf_items_map = {(si.shelf_id, si.product_id): si for si in shelf_items}
-
-        total = 0.0
-
-        for item_in in data.items:
-            product = products_map.get(item_in.product_id)
-            if not product:
-                raise NotFoundException(
-                    f"Producto {item_in.product_id} no encontrado"
-                )
-
-            if product.stock < item_in.quantity:
-                raise ConflictException(
-                    f"Stock insuficiente para '{product.name}': "
-                    f"hay {product.stock}, solicitados {item_in.quantity}"
-                )
-
-            if item_in.shelf_id is not None:
-                shelf_item = shelf_items_map.get((item_in.shelf_id, item_in.product_id))
-                if not shelf_item:
-                    raise NotFoundException(
-                        f"Producto {item_in.product_id} no asignado a la estantería "
-                        f"{item_in.shelf_id}"
-                    )
-                if shelf_item.quantity < item_in.quantity:
-                    raise ConflictException(
-                        f"Stock insuficiente en estantería {item_in.shelf_id} para "
-                        f"'{product.name}': hay {shelf_item.quantity}, "
-                        f"solicitados {item_in.quantity}"
-                    )
-
-            total += round(item_in.quantity * item_in.unit_price, 2)
+        total = sum(
+            round(item_in.quantity * item_in.unit_price, 2) for item_in in data.items
+        )
 
         order = await self.order_repo.create(
             customer_name=data.customer_name,
@@ -125,6 +90,104 @@ class OrderService:
             await self.audit.log_create("OrderItem", item.id, user_id, item)
 
         await self.audit.log_create("Order", order.id, user_id, order)
+
+        return await self._build_detail(order.id)
+
+    async def _validate_items(self, items: list[OrderItemCreate]) -> tuple[dict, dict]:
+        product_ids = [i.product_id for i in items]
+        products = await self.shelf_item_repo.get_products_by_ids(product_ids)
+        products_map = {p.id: p for p in products}
+
+        shelf_ids = [i.shelf_id for i in items if i.shelf_id is not None]
+        shelf_items_map = {}
+        if shelf_ids:
+            shelf_items = await self.shelf_item_repo.get_items_by_product_ids(product_ids)
+            shelf_items_map = {(si.shelf_id, si.product_id): si for si in shelf_items}
+
+        for item_in in items:
+            product = products_map.get(item_in.product_id)
+            if not product:
+                raise NotFoundException(
+                    f"Producto {item_in.product_id} no encontrado"
+                )
+
+            if product.stock < item_in.quantity:
+                raise ConflictException(
+                    f"Stock insuficiente para '{product.name}': "
+                    f"hay {product.stock}, solicitados {item_in.quantity}"
+                )
+
+            if item_in.shelf_id is not None:
+                shelf_item = shelf_items_map.get((item_in.shelf_id, item_in.product_id))
+                if not shelf_item:
+                    raise NotFoundException(
+                        f"Producto {item_in.product_id} no asignado a la estantería "
+                        f"{item_in.shelf_id}"
+                    )
+                if shelf_item.quantity < item_in.quantity:
+                    raise ConflictException(
+                        f"Stock insuficiente en estantería {item_in.shelf_id} para "
+                        f"'{product.name}': hay {shelf_item.quantity}, "
+                        f"solicitados {item_in.quantity}"
+                    )
+
+        return products_map, shelf_items_map
+
+    async def update(self, order_id: int, data: OrderUpdate, user_id: int) -> OrderDetailResponse:
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            raise NotFoundException("Pedido no encontrado")
+
+        if order.status == OrderStatus.DELIVERED:
+            raise ConflictException("No se puede editar un pedido ya entregado")
+
+        payload = data.model_dump(exclude_unset=True)
+
+        customer_fields = [
+            "customer_name", "customer_email", "customer_phone",
+            "customer_document", "customer_address", "notes",
+        ]
+        update_kwargs = {k: v for k, v in payload.items() if k in customer_fields}
+
+        if "items" in payload:
+            new_items = payload["items"]
+            if not new_items:
+                raise ValidationException("El pedido debe tener al menos un producto")
+
+            items_in = [OrderItemCreate(**it) if isinstance(it, dict) else it for it in new_items]
+            products_map, shelf_items_map = await self._validate_items(items_in)
+
+            total = sum(
+                round(it_in.quantity * it_in.unit_price, 2) for it_in in items_in
+            )
+            update_kwargs["total"] = round(total, 2)
+
+            existing_items = await self.order_item_repo.get_items_by_order(order_id)
+            for existing in existing_items:
+                await self.order_item_repo.delete(existing)
+            await self.audit.log_update(
+                "Order", order.id, user_id,
+                {"action": "items_replaced", "previous_count": len(existing_items)},
+            )
+
+            for it_in in items_in:
+                subtotal = round(it_in.quantity * it_in.unit_price, 2)
+                new_item = await self.order_item_repo.create(
+                    order_id=order.id,
+                    product_id=it_in.product_id,
+                    shelf_id=it_in.shelf_id,
+                    quantity=it_in.quantity,
+                    unit_price=it_in.unit_price,
+                    subtotal=subtotal,
+                )
+                await self.audit.log_create("OrderItem", new_item.id, user_id, new_item)
+
+        if update_kwargs:
+            await self.order_repo.update(order, **update_kwargs)
+            await self.audit.log_update(
+                "Order", order.id, user_id,
+                {k: v for k, v in update_kwargs.items() if k != "total"},
+            )
 
         return await self._build_detail(order.id)
 
@@ -183,7 +246,7 @@ class OrderService:
 
         prev_tenant = current_tenant_id.get()
         current_tenant_id.set(order.tenant_id)
-        await self.sale_service.create(sale_data, user_id, order.cash_register_id)
+        await self.sale_service.create(sale_data, user_id, cash_register_id)
         current_tenant_id.set(prev_tenant)
 
         previous_status = order.status

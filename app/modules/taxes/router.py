@@ -23,7 +23,7 @@ async def list_taxes(
     name: str | None = Query(default=None, description="Nombre del impuesto"),
     filters: dict = FilterParams,
     service: TaxService = Depends(get_tax_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.TAXES_READ)),
+    _perm: "User" = Depends(require_permission(PermissionCode.TAXES_VIEW)),
 ):
     merged = dict(filters)
     if name is not None:
@@ -35,7 +35,7 @@ async def list_taxes(
 async def create_tax(
     data: TaxCreate,
     service: TaxService = Depends(get_tax_service),
-    user: "User" = Depends(require_permission(PermissionCode.TAXES_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TAXES_CREATE)),
 ):
     return await service.create(data, user.id)
 
@@ -45,7 +45,7 @@ async def update_tax(
     tax_id: int,
     data: TaxUpdate,
     service: TaxService = Depends(get_tax_service),
-    user: "User" = Depends(require_permission(PermissionCode.TAXES_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TAXES_EDIT)),
 ):
     return await service.update(tax_id, data, user.id)
 
@@ -54,6 +54,6 @@ async def update_tax(
 async def delete_tax(
     tax_id: int,
     service: TaxService = Depends(get_tax_service),
-    user: "User" = Depends(require_permission(PermissionCode.TAXES_MANAGE)),
+    user: "User" = Depends(require_permission(PermissionCode.TAXES_DELETE)),
 ):
     await service.delete(tax_id, user.id)

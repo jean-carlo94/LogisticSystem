@@ -7,9 +7,9 @@ from app.core.exceptions import ConflictException, NotFoundException, Validation
 from app.core.pagination import PaginatedResponse
 from app.core.tenant import current_tenant_id
 from app.modules.cash_register.model import CashRegisterStatus
-from app.modules.cash_register.repository import CashRegisterRepository
+from app.modules.cash_register.repository import CashRegisterCRUDRepository, CashRegisterRepository
 from app.modules.cash_register.schema import (
-    CashRegisterOpenRequest, CashRegisterCloseRequest,
+    CashRegisterCloseRequest, CashRegisterCreate, CashRegisterOpenRequest, CashRegisterUpdate,
 )
 
 
@@ -17,6 +17,35 @@ class CashRegisterService:
     def __init__(self, repo: CashRegisterRepository, audit: AuditLogger):
         self.repo = repo
         self.audit = audit
+
+    async def _build_session_response(self, session) -> dict:
+        cache = {}
+        if not hasattr(self, "_register_names"):
+            self._register_names = cache
+        rid = session.cash_register_id
+        if rid not in self._register_names:
+            register = await self.repo.db.get(
+                type("X", (), {"__tablename__": "cash_registers"}),
+                rid,
+                populate_existing=True,
+            )
+            # ponytail: simple db.get, not worth a repo method for one lookup
+            pass
+        return {
+            "id": session.id,
+            "tenant_id": session.tenant_id,
+            "cash_register_id": session.cash_register_id,
+            "cash_register_name": None,
+            "user_id": session.user_id,
+            "opening_amount": session.opening_amount,
+            "closing_amount": session.closing_amount,
+            "expected_cash": None,
+            "discrepancy": session.discrepancy,
+            "notes": session.notes,
+            "status": session.status.value,
+            "opened_at": session.opened_at,
+            "closed_at": session.closed_at,
+        }
 
     async def get_current(self, user_id: int):
         tid = current_tenant_id.get()
@@ -29,11 +58,14 @@ class CashRegisterService:
             tid, session.opened_at
         )
         expected = round(session.opening_amount + total_cash, 2)
+        from app.modules.cash_register.model import CashRegister
+        register = await self.repo.db.get(CashRegister, session.cash_register_id)
         return {
             "id": session.id,
             "tenant_id": session.tenant_id,
+            "cash_register_id": session.cash_register_id,
+            "cash_register_name": register.name if register else None,
             "user_id": session.user_id,
-            "name": session.name,
             "opening_amount": session.opening_amount,
             "closing_amount": session.closing_amount,
             "expected_cash": expected,
@@ -53,27 +85,54 @@ class CashRegisterService:
         )
         return PaginatedResponse.of(list(items), total, page, size)
 
-    async def open(self, data: CashRegisterOpenRequest, user_id: int) -> dict:
+    async def open(self, data: CashRegisterOpenRequest, user_id: int):
+        from app.modules.cash_register.model import CashRegister
+
         tid = current_tenant_id.get()
         if tid is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
-        existing = await self.repo.get_current(tid, user_id)
-        if existing:
+        register = await self.repo.db.get(CashRegister, data.cash_register_id)
+        if not register or register.tenant_id != tid:
+            raise NotFoundException("Caja registradora no encontrada")
+        if not register.is_active:
+            raise ConflictException("Esta caja registradora está inactiva")
+
+        existing_user = await self.repo.get_current(tid, user_id)
+        if existing_user:
             raise ConflictException("Ya tienes una caja abierta. Ciérrala primero.")
+
+        existing_register = await self.repo.get_open_by_register(data.cash_register_id)
+        if existing_register:
+            raise ConflictException("Esta caja ya está en uso por otro usuario")
 
         session = await self.repo.create(
             tenant_id=tid,
             user_id=user_id,
-            name=data.name,
+            cash_register_id=data.cash_register_id,
             opening_amount=data.opening_amount,
         )
         await self.audit.log_create("CashRegister", session.id, user_id, session)
-        return session
+
+        return {
+            "id": session.id,
+            "tenant_id": session.tenant_id,
+            "cash_register_id": session.cash_register_id,
+            "cash_register_name": register.name,
+            "user_id": session.user_id,
+            "opening_amount": session.opening_amount,
+            "closing_amount": session.closing_amount,
+            "expected_cash": None,
+            "discrepancy": session.discrepancy,
+            "notes": session.notes,
+            "status": session.status.value,
+            "opened_at": session.opened_at,
+            "closed_at": session.closed_at,
+        }
 
     async def close(
         self, data: CashRegisterCloseRequest, user_id: int
-    ) -> dict:
+    ):
         tid = current_tenant_id.get()
         if tid is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
@@ -104,4 +163,62 @@ class CashRegisterService:
              "expected_cash": expected, "discrepancy": discrepancy},
         )
 
-        return session
+        from app.modules.cash_register.model import CashRegister
+        register = await self.repo.db.get(CashRegister, session.cash_register_id)
+        return {
+            "id": session.id,
+            "tenant_id": session.tenant_id,
+            "cash_register_id": session.cash_register_id,
+            "cash_register_name": register.name if register else None,
+            "user_id": session.user_id,
+            "opening_amount": session.opening_amount,
+            "closing_amount": session.closing_amount,
+            "expected_cash": expected,
+            "discrepancy": discrepancy,
+            "notes": session.notes,
+            "status": session.status.value,
+            "opened_at": session.opened_at,
+            "closed_at": session.closed_at,
+        }
+
+
+class CashRegisterCRUDService:
+    def __init__(self, repo: CashRegisterCRUDRepository, audit: AuditLogger):
+        self.repo = repo
+        self.audit = audit
+
+    async def get_all(self, page=1, size=20, filters: dict | None = None):
+        skip = (page - 1) * size
+        items, total = await self.repo.get_all(skip=skip, limit=size, filters=filters)
+        return PaginatedResponse.of(list(items), total, page, size)
+
+    async def get_by_id(self, register_id: int):
+        register = await self.repo.get_by_id(register_id)
+        if not register:
+            raise NotFoundException("Caja registradora no encontrada")
+        return register
+
+    async def create(self, data: CashRegisterCreate, user_id: int):
+        tid = current_tenant_id.get()
+        if tid is None:
+            raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
+        register = await self.repo.create(name=data.name)
+        await self.audit.log_create("CashRegister", register.id, user_id, register)
+        return register
+
+    async def update(self, register_id: int, data: CashRegisterUpdate, user_id: int):
+        register = await self.repo.get_by_id(register_id)
+        if not register:
+            raise NotFoundException("Caja registradora no encontrada")
+        kwargs = data.model_dump(exclude_unset=True)
+        if kwargs:
+            await self.repo.update(register, **kwargs)
+            await self.audit.log_update("CashRegister", register.id, user_id, kwargs)
+        return register
+
+    async def delete(self, register_id: int, user_id: int):
+        register = await self.repo.get_by_id(register_id)
+        if not register:
+            raise NotFoundException("Caja registradora no encontrada")
+        await self.repo.update(register, is_active=False)
+        await self.audit.log_update("CashRegister", register.id, user_id, {"is_active": False})
