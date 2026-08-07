@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, status
 
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
-from app.core.security import require_permission
+from app.core.security import require_cash_register, require_permission
 from app.modules.orders.deps import get_order_service
 from app.modules.orders.schema import OrderCreate, OrderDetailResponse, OrderResponse
 from app.modules.orders.service import OrderService
@@ -36,8 +36,9 @@ async def create_order(
     data: OrderCreate,
     service: OrderService = Depends(get_order_service),
     user: "User" = Depends(require_permission(PermissionCode.ORDERS_CREATE)),
+    cash_register_id: int | None = Depends(require_cash_register),
 ):
-    return await service.create(data, user.id)
+    return await service.create(data, user.id, cash_register_id)
 
 
 @router.get("/{order_id}", response_model=OrderDetailResponse)
@@ -72,5 +73,6 @@ async def deliver_order(
     order_id: int,
     service: OrderService = Depends(get_order_service),
     user: "User" = Depends(require_permission(PermissionCode.ORDERS_MANAGE)),
+    cash_register_id: int | None = Depends(require_cash_register),
 ):
-    return await service.deliver(order_id, user.id)
+    return await service.deliver(order_id, user.id, cash_register_id)

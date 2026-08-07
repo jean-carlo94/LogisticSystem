@@ -8,10 +8,12 @@ from app.modules.customers.repository import CustomerRepository
 from app.modules.customers.service import CustomerService
 from app.modules.orders.repository import OrderItemRepository, OrderRepository
 from app.modules.orders.service import OrderService
+from app.modules.payments.repository import PaymentRepository
 from app.modules.products.repository import ProductRepository
 from app.modules.sales.repository import SaleItemRepository, SaleRepository
 from app.modules.sales.service import SaleService
 from app.modules.shelves.repository import ShelfItemRepository, ShelfRepository
+from app.modules.tenants.repository import TenantRepository
 
 
 async def get_order_service(
@@ -26,6 +28,8 @@ async def get_order_service(
         ProductRepository(db),
         CustomerService(CustomerRepository(db), audit),
         audit,
+        PaymentRepository(db),
+        TenantRepository(db),
     )
     return OrderService(
         OrderRepository(db),

@@ -2,7 +2,7 @@ from datetime import datetime
 
 import enum
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, Text, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -24,6 +24,7 @@ class CashRegisterSession(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, index=True
     )
+    name: Mapped[str | None] = mapped_column(String(100), default="Caja principal")
     opening_amount: Mapped[float] = mapped_column(Float, nullable=False)
     closing_amount: Mapped[float | None] = mapped_column(Float, default=None)
     expected_cash: Mapped[float | None] = mapped_column(Float, default=None)

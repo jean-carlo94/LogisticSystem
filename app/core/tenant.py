@@ -15,6 +15,9 @@ async def resolve_tenant(user, x_tenant: str | None) -> int | None:
             if tenant is None:
                 from app.core.exceptions import NotFoundException
                 raise NotFoundException("Tenant no encontrado")
+            if not tenant.is_active:
+                from app.core.exceptions import ForbiddenException
+                raise ForbiddenException("Este tenant está deshabilitado")
             current_tenant_id.set(tenant.id)
             return tenant.id
     if not user.is_super_admin and user.tenant_id is not None:

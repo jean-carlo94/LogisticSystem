@@ -7,18 +7,29 @@ from app.modules.cash_register.model import CashRegisterSession, CashRegisterSta
 class CashRegisterRepository(BaseRepository):
     model = CashRegisterSession
 
-    async def get_current(self, tenant_id: int) -> CashRegisterSession | None:
+    async def get_current(self, tenant_id: int, user_id: int) -> CashRegisterSession | None:
         from sqlalchemy import select
         result = await self.db.scalar(
             select(CashRegisterSession).where(
                 CashRegisterSession.tenant_id == tenant_id,
+                CashRegisterSession.user_id == user_id,
+                CashRegisterSession.status == CashRegisterStatus.OPEN,
+            )
+        )
+        return result
+
+    async def get_open_for_user(self, user_id: int) -> CashRegisterSession | None:
+        from sqlalchemy import select
+        result = await self.db.scalar(
+            select(CashRegisterSession).where(
+                CashRegisterSession.user_id == user_id,
                 CashRegisterSession.status == CashRegisterStatus.OPEN,
             )
         )
         return result
 
     async def get_cash_payments_since(
-        self, tenant_id: int, since: str
+        self, tenant_id: int, since
     ) -> float:
         result = await self.db.scalar(
             sa_text(

@@ -74,6 +74,7 @@ class StationSessionResponse(BaseModel):
     total: float
     status: str
     sale_id: int | None = None
+    cash_register_id: int | None = None
     created_by: int
     opened_at: datetime
     closed_at: datetime | None = None

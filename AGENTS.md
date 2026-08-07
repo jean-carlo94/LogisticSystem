@@ -26,7 +26,7 @@ app/
 ├── core/
 │   ├── config.py             # pydantic-settings con @lru_cache (sin defaults hardcodeados)
 │   ├── database.py           # async engine lazy + AsyncSession + Base (CRUD + filtros + tenant scoping)
-│   ├── security.py           # JWT + bcrypt + get_current_user + require_permission + _tenant_context
+│   ├── security.py           # JWT + bcrypt + get_current_user + require_permission + require_cash_register + API Key auth + _tenant_context
 │   ├── audit.py              # AuditLogger (serializa Pydantic/SQLAlchemy/dict, lee tenant context)
 │   ├── pagination.py         # PaginatedResponse + PaginationParams + FilterParams
 │   ├── storage.py            # StorageBackend ABC + LocalStorageBackend (S3 futuro)
@@ -50,7 +50,14 @@ app/
     ├── shelves/              # CRUD estanterías + items + validación capacidad
     ├── categories/           # CRUD categorías por tenant + asignación a productos
     ├── sales/                # Crear ventas, descuento de stock producto + estantería
-    └── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
+    ├── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
+    ├── payments/             # Registro de pagos (cash/card/transfer/wallet) + split payments
+    ├── taxes/                # CRUD impuestos por tenant + asignación a productos (ProductTax)
+    ├── customers/            # CRUD clientes por tenant + auto-detección en ventas/pedidos
+    ├── cash_register/        # Caja registradora multi-caja: 1 por usuario, N simultáneas
+    ├── stations/             # Puntos de servicio: mesas/bar/hotel/delivery/mostrador
+    ├── tenant_config/        # Config de módulos habilitados por tenant
+    └── api_keys/             # API Keys para integraciones externas (SHA-256, permisos propios)
 ```
 
 ### Layer chain (STRICT)
@@ -93,7 +100,8 @@ def endpoint(db: Session = Depends(get_db)): ...
 #    Excepción: OrderService inyecta SaleService via deps.py para crear venta al entregar pedido.
 #    Excepción: SaleService inyecta CustomerService via deps.py para find_or_create cliente.
 #    Excepción: StationService inyecta SaleService + CustomerService via deps.py para crear venta al close.
-#    Esto es intencional — duplicar lógica de venta/cliente sería peor que el acoplamiento.
+#    Excepción: Security module inyecta CashRegisterRepository para require_cash_register dependency.
+#    Esto es intencional — duplicar lógica de venta/cliente/caja sería peor que el acoplamiento.
 from app.modules.roles.service import RoleService
 
 # ❌ List endpoint without PaginationParams — pagination silently broken
@@ -157,6 +165,33 @@ def name(self) -> str:
 @name.setter
 def name(self, value: str):
     self._name = value.strip()  # ✅
+
+# ✅ Router with require_cash_register for endpoints that need open register
+@router.post("/sales/", response_model=...)
+async def create_sale(
+    data: SaleCreate,
+    user = Depends(require_permission(...)),
+    cash_register_id: int | None = Depends(require_cash_register),  # ✅
+):
+    return await service.create(data, user.id, cash_register_id)
+
+# ✅ Router with require_module to block disabled module endpoints
+@router.get("/")
+async def list_items(
+    ...
+    _module = Depends(require_module("stations")),  # ✅
+):
+    ...
+
+# ✅ API Key handler in get_current_user returns synthetic User
+if x_api_key:
+    key = await lookup(key_hash)
+    return User(tenant_id=key.tenant_id, ... _api_key=key)  # ✅
+
+# ✅ require_permission handles both JWT users and API keys
+api_key = getattr(current_user, "_api_key", None)
+if api_key is not None:
+    if permission not in api_key.permissions: ...  # ✅
 ```
 
 ## Key conventions
@@ -172,7 +207,7 @@ def name(self, value: str):
 - **Orders shelf optional**: `OrderItem.shelf_id` es nullable. Si se especifica, valida que el producto esté asignado a esa estantería y con stock suficiente. Si no, solo valida producto + stock general. Al entregar, la venta resultante respeta el `shelf_id` (o lo omite) del pedido original.
 - **Events append-only**: GET only. Written via `AuditLogger` inside services. Generic: `entity_type + entity_id + user_id + action`.
 - **Audit logging**: `AuditLogger` (`app/core/audit.py`) serializes Pydantic schemas, SQLAlchemy entities (via `class_mapper`), dicts. Filters `hashed_password`. Injected via `Depends(get_audit_logger)`.
-- **RBAC**: `PermissionCode` enum in `app/core/permissions.py`. `require_permission(code)` dependency in routes. `is_super_admin=True` bypasses all checks. Seed in `app/seed.json`.
+- **RBAC**: `PermissionCode` enum in `app/core/permissions.py`. `require_permission(code)` dependency in routes. `is_super_admin=True` bypasses all checks. API Keys verifican contra `key.permissions`. Seed in `app/seed.json`. Permisos nuevos: `api_keys_read`, `api_keys_manage`, `tenant_config_read`, `tenant_config_manage`.
 - **Transactions**: `get_db` commits on success, rolls back on exception. `Base` methods use `flush` (not commit). Request-scoped atomicity.
 - **Async**: `AsyncSession` + `async def` en todas las capas (router, service, repository, Base).
 - **Pagination**: `PaginationParams = Depends(get_pagination)` for query params. Return type `PaginatedResponse[T]`.
@@ -187,6 +222,9 @@ def name(self, value: str):
 - **Admin seed**: Credenciales vía `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars. Si no se definen, usa fallback `admin@alunatechnologies.com` / `admin123`. `is_super_admin=True`, sin `tenant_id`.
 - **Docker**: Multi-stage build (gcc/libpq-dev solo en stage builder). `.dockerignore` excluye `.env`, `.git`, `venv/`, etc.
 - **CORS**: `CORS_ORIGINS` (list[str] en JSON). Vacío = `allow_origins=["*"]` sin credenciales. Con orígenes explícitos → `allow_credentials=True` y `Access-Control-Allow-Credentials: true`. Si el frontend usa `credentials: 'include'` o `Authorization`, configurar orígenes explícitos: `CORS_ORIGINS=["http://localhost:5173"]`. Pasar como env var en docker-compose para que no dependa solo del archivo `.env`.
+- **Cash register multi-caja**: 1 caja abierta por usuario, N simultáneas por tenant. `require_cash_register` dependency en `security.py` verifica TenantConfig → si `cash_register` habilitado, exige caja abierta o retorna 409. Sales/Orders/StationSessions tienen `cash_register_id` FK nullable. Estación: se asigna al abrir sesión; al close la venta hereda el ID. Orden: se asigna al crear; al deliver la venta usa `order.cash_register_id`.
+- **API Keys**: `get_current_user` acepta `Authorization: Bearer <JWT>` o `X-Api-Key: <key>`. API keys tienen permisos propios (subconjunto de PermissionCode). `require_permission` funciona con ambos métodos (API key sintético → verifica contra `key.permissions`). Hash SHA-256, no bcrypt (debe ser determinístico para lookup). `raw_key` solo se retorna al crear (51 chars, prefijo `ak_`).
+- **Tenant Config**: `tenant_configs` table con `tenant_id` UNIQUE + `modules_enabled` JSON. Módulos: products, shelves, categories, sales, orders, stations, cash_register, taxes, customers, payments. Se crea automáticamente al crear tenant (todos habilitados). Lazy-create en `GET /tenant-config/{id}` si no existe. `require_module(name)` dependency en routes para bloquear módulos deshabilitados.
 
 ## Multitenant
 
@@ -195,11 +233,11 @@ Schema compartido (misma DB) con columna `tenant_id` en tablas de negocio. Aisla
 ### Modelo de datos
 
 **Tablas con `tenant_id`:**
-`users` (nullable, null = platform admin), `products`, `categories`, `shelves`, `sales`, `orders`, `events` (nullable), `roles`.
+`users` (nullable, null = platform admin), `products`, `categories`, `shelves`, `sales`, `orders`, `events` (nullable), `roles`, `tenant_configs` (UNIQUE), `api_keys`.
 
 **Sin `tenant_id`** (scoped via FK padre): `shelf_items`, `sale_items`, `order_items`, `product_categories`, `role_permissions`, `user_roles`, `permissions` (global).
 
-**Unique constraints compuestos:** `(tenant_id, barcode)` en products, `(tenant_id, code)` en shelves, `(tenant_id, name)` en categories y roles. `email` se mantiene unique global.
+**Unique constraints compuestos:** `(tenant_id, barcode)` en products, `(tenant_id, code)` en shelves, `(tenant_id, name)` en categories y roles. `email` se mantiene unique global. `Tenant.business_id` (String 50, nullable, indexado) acepta cualquier identificador fiscal con caracteres especiales.
 
 ### Tenant context (ContextVar)
 
@@ -215,6 +253,8 @@ current_tenant_id: ContextVar[int | None] = ContextVar("current_tenant_id", defa
 4. `Base.get_all/get_id` aplican `WHERE tenant_id = :tid` si el modelo tiene la columna y el context no es None
 5. `BaseRepository.create` auto-inyecta `tenant_id` en kwargs si no se pasó explícitamente
 
+**Tenant disable:** `get_current_user` y `resolve_tenant` verifican `Tenant.is_active` al resolver el tenant context. Si `is_active=False` → 403 "Este tenant está deshabilitado". Aplica tanto a usuarios JWT como API Keys como platform admins con `X-Tenant`.
+
 **Platform admin:**
 - Sin `X-Tenant` → `current_tenant_id = None` → ve TODOS los tenants
 - Con `X-Tenant: <slug>` → switchea a ese tenant para soporte/configuración
@@ -222,9 +262,10 @@ current_tenant_id: ContextVar[int | None] = ContextVar("current_tenant_id", defa
 ### Creación de tenant
 
 `POST /tenants` (`TENANTS_MANAGE`):
-1. Crea registro en tabla `tenants`
+1. Crea registro en tabla `tenants` (name, slug, business_id opcional)
 2. `seed_tenant_roles(tenant.id)` — crea roles Admin/Operator/Viewer para ese tenant con permisos del `seed.json`
 3. Si se envían `admin_email` + `admin_password` → crea usuario admin con `tenant_id` y rol Admin
+4. `_ensure_tenant_config(db, tenant_id)` — crea TenantConfig con todos los módulos habilitados
 
 ### JWT
 
@@ -440,9 +481,11 @@ class ShelfDetailResponse(ShelfResponse):
 ## Seed + admin default
 
 `app/core/seed.py` crea al primer arranque:
-- Permisos globales desde `seed.json` (idempotente, solo si tabla `permissions` vacía)
+- Permisos globales desde `seed.json` (idempotente, solo si tabla `permissions` vacía). 35 permisos: `products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`, `categories_create`, `categories_read`, `categories_update`, `categories_delete`, `sales_create`, `sales_read`, `sales_cancel`, `orders_create`, `orders_read`, `orders_manage`, `tenants_manage`, `taxes_read`, `taxes_manage`, `customers_read`, `customers_manage`, `payments_read`, `payments_manage`, `stations_read`, `stations_manage`, `cash_register_read`, `cash_register_manage`, `api_keys_read`, `api_keys_manage`, `tenant_config_read`, `tenant_config_manage`.
 - Admin default con `ADMIN_EMAIL`/`ADMIN_PASSWORD` (usa fallback `admin@alunatechnologies.com` / `admin123`). `is_super_admin=True`, sin `tenant_id`.
 - Los roles (Admin/Operator/Viewer) NO se crean globalmente — se crean por tenant via `seed_tenant_roles(tenant_id)` al llamar `POST /tenants`.
+- TenantConfig se crea automáticamente al crear tenant con todos los módulos habilitados. `GET /tenant-config/{id}` también hace lazy-create si no existe.
+- Admin/Operator/Viewer incluyen permisos `api_keys_read/manage` y `tenant_config_read/manage` (ver `seed.json`).
 
 ## DB engine (lazy)
 

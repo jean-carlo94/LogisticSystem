@@ -18,20 +18,30 @@ class CashRegisterService:
         self.repo = repo
         self.audit = audit
 
-    async def get_current(self):
+    async def get_current(self, user_id: int):
         tid = current_tenant_id.get()
         if not tid:
             return None
-        session = await self.repo.get_current(tid)
+        session = await self.repo.get_current(tid, user_id)
         if not session:
             return None
         total_cash = await self.repo.get_cash_payments_since(
-            tid, session.opened_at.isoformat()
+            tid, session.opened_at
         )
         expected = round(session.opening_amount + total_cash, 2)
         return {
-            **session.__dict__,
+            "id": session.id,
+            "tenant_id": session.tenant_id,
+            "user_id": session.user_id,
+            "name": session.name,
+            "opening_amount": session.opening_amount,
+            "closing_amount": session.closing_amount,
             "expected_cash": expected,
+            "discrepancy": session.discrepancy,
+            "notes": session.notes,
+            "status": session.status.value,
+            "opened_at": session.opened_at,
+            "closed_at": session.closed_at,
         }
 
     async def get_all(
@@ -48,13 +58,14 @@ class CashRegisterService:
         if tid is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
-        existing = await self.repo.get_current(tid)
+        existing = await self.repo.get_current(tid, user_id)
         if existing:
-            raise ConflictException("Ya existe una caja abierta. Ciérrela primero.")
+            raise ConflictException("Ya tienes una caja abierta. Ciérrala primero.")
 
         session = await self.repo.create(
             tenant_id=tid,
             user_id=user_id,
+            name=data.name,
             opening_amount=data.opening_amount,
         )
         await self.audit.log_create("CashRegister", session.id, user_id, session)
@@ -67,12 +78,12 @@ class CashRegisterService:
         if tid is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
-        session = await self.repo.get_current(tid)
+        session = await self.repo.get_current(tid, user_id)
         if not session:
-            raise NotFoundException("No hay caja abierta para cerrar")
+            raise NotFoundException("No tienes una caja abierta para cerrar")
 
         total_cash = await self.repo.get_cash_payments_since(
-            tid, session.opened_at.isoformat()
+            tid, session.opened_at
         )
         expected = round(session.opening_amount + total_cash, 2)
         discrepancy = round(data.closing_amount - expected, 2)

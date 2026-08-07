@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class CashRegisterOpenRequest(BaseModel):
+    name: str = Field(default="Caja principal", min_length=1, max_length=100)
     opening_amount: float = Field(..., ge=0)
 
 
@@ -16,6 +17,7 @@ class CashRegisterResponse(BaseModel):
     id: int
     tenant_id: int
     user_id: int
+    name: str | None = "Caja principal"
     opening_amount: float
     closing_amount: float | None = None
     expected_cash: float | None = None

@@ -174,7 +174,7 @@ class SaleService:
             created_at=sale.created_at.isoformat() if sale.created_at else "",
         )
 
-    async def create(self, data: SaleCreate, user_id: int) -> SaleDetailResponse:
+    async def create(self, data: SaleCreate, user_id: int, cash_register_id: int | None = None) -> SaleDetailResponse:
         if not data.items:
             raise ValidationException("La venta debe tener al menos un producto")
         if current_tenant_id.get() is None:
@@ -277,6 +277,7 @@ class SaleService:
             status=SaleStatus.COMPLETED,
             notes=data.notes,
             created_by=user_id,
+            cash_register_id=cash_register_id,
         )
 
         for it in items_deducted:

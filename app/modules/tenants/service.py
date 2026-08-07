@@ -28,9 +28,11 @@ class TenantService:
         if await self.repo.find_by_slug(data.slug):
             raise ConflictException("El slug ya está en uso")
 
-        tenant = await self.repo.create(name=data.name, slug=data.slug)
+        tenant = await self.repo.create(name=data.name, slug=data.slug, business_id=data.business_id)
 
         await seed_tenant_roles(tenant.id, db=self.repo.db)
+
+        await _ensure_tenant_config(self.repo.db, tenant.id)
 
         if data.admin_email and data.admin_password:
             user_repo = UserRepository(self.repo.db)
@@ -86,3 +88,16 @@ class TenantService:
             raise NotFoundException("Tenant no encontrado")
         await self.audit.log_delete("Tenant", tenant.id, actor_id, tenant)
         await self.repo.update(tenant, is_active=False)
+
+
+async def _ensure_tenant_config(db, tenant_id: int) -> None:
+    from sqlalchemy import select
+    from app.modules.tenant_config.model import DEFAULT_MODULES, TenantConfig
+
+    existing = await db.scalar(
+        select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
+    )
+    if not existing:
+        config = TenantConfig(tenant_id=tenant_id, modules_enabled=list(DEFAULT_MODULES))
+        db.add(config)
+        await db.flush()

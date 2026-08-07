@@ -1,5 +1,5 @@
 {
-  "_version": "0.5.0",
+  "_version": "0.8.0",
   "_guia": "Documento para agente frontend. Cada endpoint tiene request/response shapes y reglas de negocio relevantes al consumir la API. Incluye multitenant y POS.",
 
   "base_url": "http://localhost:8000/api/v1",
@@ -20,13 +20,14 @@
       "comportamiento": "Automáticamente solo ve/modifica datos de su propio tenant. No necesita header adicional.",
       "jwt": "El JWT incluye el campo 'tid' con el tenant_id"
     },
-    "reglas_frontend": [
-      "Si el usuario es platform admin (is_super_admin=true), mostrar selector de tenant en la UI.",
-      "Al seleccionar un tenant, enviar header X-Tenant: acme-corp en todas las requests.",
-      "Si el usuario NO es platform admin, no mostrar selector de tenant. El scoping es automático.",
-      "Las respuestas de API no incluyen tenant_id en el JSON (es interno). El frontend no necesita manejarlo.",
-      "Para obtener la lista de tenants disponibles: GET /tenants/ (solo platform admin)."
-    ]
+      "reglas_frontend": [
+        "Si el usuario es platform admin (is_super_admin=true), mostrar selector de tenant en la UI.",
+        "Al seleccionar un tenant, enviar header X-Tenant: acme-corp en todas las requests.",
+        "Si el usuario NO es platform admin, no mostrar selector de tenant. El scoping es automático.",
+        "Las respuestas de API no incluyen tenant_id en el JSON (es interno). El frontend no necesita manejarlo.",
+        "Para obtener la lista de tenants disponibles: GET /tenants/ (solo platform admin).",
+        "Si un tenant está deshabilitado (is_active=false), todas las requests retornan 403 'Este tenant está deshabilitado'. El frontend debe detectar este error y mostrar mensaje apropiado."
+      ]
   },
 
   "respuestas_de_error": {
@@ -814,8 +815,7 @@
           "Alternativa: PUT item con quantity=0 hace lo mismo."
         ]
       }
-    }
-  },
+    },
 
     "categories": {
       "list": {
@@ -980,7 +980,9 @@
           "customer_id": "int|null",
           "total": "float",
           "status": "string (COMPLETED|CANCELLED)",
+          "payment_status": "string",
           "notes": "string|null",
+          "cash_register_id": "int|null",
           "created_at": "ISO8601"
         }
       },
@@ -1017,6 +1019,7 @@
           "status": "COMPLETED",
           "payment_status": "PENDING",
           "notes": "string|null",
+          "cash_register_id": "int|null",
           "created_at": "ISO8601",
           "created_by": "int (user_id)",
           "items": [
@@ -1100,7 +1103,7 @@
           "payments es array con método y monto de cada pago registrado.",
           "items.taxes es el desglose de impuestos por línea."
         ]
-      }
+      },
 
       "get_detail": {
         "method": "GET",
@@ -1129,6 +1132,7 @@
           "total": "float",
           "status": "string (CREATED|PREPARING|READY|DELIVERED)",
           "notes": "string|null",
+          "cash_register_id": "int|null",
           "created_at": "ISO8601",
           "updated_at": "ISO8601"
         }
@@ -1160,6 +1164,7 @@
           "total": "float",
           "status": "CREATED",
           "notes": "string|null",
+          "cash_register_id": "int|null",
           "created_at": "ISO8601",
           "updated_at": "ISO8601",
           "created_by": "int (user_id)",
@@ -1230,18 +1235,21 @@
     },
 
     "tenants": {
-      "_intro": "Gestión de tenants (empresas). Solo platform admin (is_super_admin=true). Al crear un tenant se generan automáticamente roles Admin/Operator/Viewer para ese tenant. Opcionalmente se puede crear el usuario admin del tenant en el mismo request.",
+      "_intro": "Gestión de tenants (empresas). Solo platform admin (is_super_admin=true). Al crear un tenant se generan automáticamente roles Admin/Operator/Viewer y TenantConfig con todos los módulos. Opcionalmente se puede crear el usuario admin del tenant. business_id acepta cualquier identificador fiscal (NIT/RUT) con caracteres especiales. Al deshabilitar (is_active=false), el tenant bloquea todas las operaciones (403).",
 
       "list": {
         "method": "GET",
         "path": "/tenants/",
         "auth": "tenants_manage",
-        "query": { "page": "int", "size": "int", "name": "string (ILIKE)", "slug": "string (ILIKE)" },
+        "query": { "page": "int", "size": "int", "name": "string (ILIKE)", "slug": "string (ILIKE)", "business_id": "string (ILIKE)" },
         "response_shape": {
           "id": "int",
           "name": "string (nombre de la empresa)",
           "slug": "string (identificador URL, ej: acme-corp)",
+          "business_id": "string|null (NIT/RUT/identificador fiscal)",
           "is_active": "bool",
+          "logo_path": "string|null",
+          "logo_url": "string|null",
           "created_at": "ISO8601",
           "updated_at": "ISO8601"
         },
@@ -1258,6 +1266,7 @@
         "request_body": {
           "name": "string (1-200, requerido, ej: 'Acme Corp')",
           "slug": "string (1-100, requerido, regex ^[a-z0-9-]+$, ej: 'acme-corp')",
+          "business_id": "string|null (max 50, NIT/RUT/ID fiscal)",
           "admin_email": "string|null (opcional, si se envía crea usuario admin del tenant)",
           "admin_password": "string|null (opcional, min 6, requerido si admin_email está presente)"
         },
@@ -1268,8 +1277,9 @@
         },
         "frontend_notes": [
           "slug debe ser URL-safe: solo minúsculas, números y guiones.",
+          "business_id acepta strings con caracteres especiales (NIT-900.123.456-7 / DV:8).",
           "Si se envían admin_email + admin_password, se crea usuario admin con tenant_id y rol Admin asignado.",
-          "Los roles Admin/Operator/Viewer se crean automáticamente para el nuevo tenant."
+          "Los roles Admin/Operator/Viewer y TenantConfig (todos los módulos habilitados) se crean automáticamente."
         ]
       },
 
@@ -1286,6 +1296,7 @@
         "auth": "tenants_manage",
         "request_body": {
           "name": "string|null (1-200, opcional)",
+          "business_id": "string|null (max 50, opcional)",
           "is_active": "bool|null (opcional)"
         },
         "response_shape": "mismo que list.items[0]"
@@ -1298,7 +1309,8 @@
         "response": "204 No Content",
         "frontend_notes": [
           "Soft delete: marca is_active=false, no borra datos.",
-          "Los datos del tenant (productos, usuarios, etc.) se conservan."
+          "Los datos del tenant (productos, usuarios, etc.) se conservan.",
+          "Al deshabilitar, todas las operaciones en ese tenant retornan 403."
         ]
       }
     },
@@ -1322,21 +1334,64 @@
     },
 
     "cash_register": {
-      "_intro": "Caja registradora. Solo 1 sesión OPEN por tenant. Al cerrar calcula expected_cash = opening_amount + Σ cash payments del turno. discrepancy = closing_amount - expected.",
-      "current": {"method": "GET", "path": "/cash-register/", "auth": "cash_register_read"},
+      "_intro": "Caja registradora. Multi-caja: cada usuario puede tener 1 caja OPEN a la vez. Varios usuarios pueden tener cajas simultáneas. Al abrir se asigna nombre. Al cerrar calcula expected_cash = opening_amount + Σ cash payments del turno. discrepancy = closing_amount - expected. Si el módulo cash_register está habilitado en TenantConfig, ventas/órdenes/estaciones exigen caja abierta y atan su cash_register_id.",
+      "current": {
+        "method": "GET", "path": "/cash-register/", "auth": "cash_register_read",
+        "response_shape": {"id": "int", "tenant_id": "int", "user_id": "int", "name": "string", "opening_amount": "float", "closing_amount": "float|null", "expected_cash": "float|null", "discrepancy": "float|null", "notes": "string|null", "status": "string (OPEN|CLOSED)", "opened_at": "ISO8601", "closed_at": "ISO8601|null"},
+        "frontend_notes": ["Retorna la caja abierta del usuario autenticado. null si no tiene ninguna abierta."]
+      },
       "open": {
         "method": "POST", "path": "/cash-register/open", "auth": "cash_register_manage",
-        "request_body": {"opening_amount": "float (>=0)"},
-        "errores": {"409": "Ya existe una caja abierta"}
+        "request_body": {"name": "string (1-100, default 'Caja principal')", "opening_amount": "float (>=0)"},
+        "errores": {"409": "Ya tienes una caja abierta. Ciérrala primero."},
+        "frontend_notes": ["1 caja por usuario, N cajas simultáneas por tenant (una por cada cajero)."]
       },
       "close": {
         "method": "POST", "path": "/cash-register/close", "auth": "cash_register_manage",
         "request_body": {"closing_amount": "float (>=0)", "notes": "string|null"},
-        "response_shape": "CashRegisterResponse (incluye expected_cash + discrepancy)"
+        "response_shape": "CashRegisterResponse (incluye expected_cash + discrepancy)",
+        "frontend_notes": ["Cierra la caja del usuario actual (no necesita ID)."]
       },
       "history": {
         "method": "GET", "path": "/cash-register/history", "auth": "cash_register_read",
+        "query": {"page": "int", "size": "int", "name": "string (ILIKE)", "status": "string (OPEN|CLOSED)"},
         "response_shape": "PaginatedResponse[CashRegisterResponse]"
+      }
+    },
+
+    "api_keys": {
+      "_intro": "API Keys para integraciones externas. Se autentican con header X-Api-Key en lugar de Bearer token. Tienen permisos propios (subconjunto de PermissionCode). La raw_key solo se muestra al crear. Hasheada con SHA-256 en BD. Heredan el tenant_id con el que fueron creadas.",
+      "list": {
+        "method": "GET", "path": "/api-keys/", "auth": "api_keys_read",
+        "query": {"page": "int", "size": "int", "name": "string (ILIKE)"},
+        "response_shape": {"id": "int", "tenant_id": "int", "name": "string", "key_prefix": "string (primeros 12 chars)", "permissions": ["string"], "is_active": "bool", "expires_at": "ISO8601|null", "last_used_at": "ISO8601|null", "created_by": "int", "created_at": "ISO8601", "updated_at": "ISO8601"}
+      },
+      "create": {
+        "method": "POST", "path": "/api-keys/", "auth": "api_keys_manage",
+        "request_body": {"name": "string (1-200)", "permissions": ["string (PermissionCode)"], "expires_at": "ISO8601|null"},
+        "response_shape": "ApiKeyResponse + raw_key: string (51 chars, solo se muestra una vez)",
+        "frontend_notes": ["raw_key solo aparece en esta respuesta. Copiarla y guardarla. No se puede recuperar después.", "Formato: ak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx."]
+      },
+      "get_one": {"method": "GET", "path": "/api-keys/{id}", "auth": "api_keys_read", "response_shape": "ApiKeyResponse (sin raw_key)"},
+      "update": {
+        "method": "PUT", "path": "/api-keys/{id}", "auth": "api_keys_manage",
+        "request_body": {"name": "string|null (1-200)", "permissions": "list[string]|null", "is_active": "bool|null"}
+      },
+      "delete": {"method": "DELETE", "path": "/api-keys/{id}", "auth": "api_keys_manage", "response": "204 No Content"}
+    },
+
+    "tenant_config": {
+      "_intro": "Configuración de módulos habilitados por tenant. Útil para deshabilitar módulos que una empresa no necesita (ej: estaciones, caja). Si un módulo no está en la lista, el frontend debe ocultarlo y la API rechazará operaciones con 403 (require_module) o 409 (require_cash_register).",
+      "get": {
+        "method": "GET", "path": "/tenant-config/{tenant_id}", "auth": "tenant_config_read",
+        "response_shape": {"id": "int", "tenant_id": "int", "modules_enabled": ["string (ver lista abajo)"], "created_at": "ISO8601", "updated_at": "ISO8601"},
+        "frontend_notes": ["Si no existe config para el tenant, se crea automáticamente con TODOS los módulos habilitados."]
+      },
+      "update": {
+        "method": "PUT", "path": "/tenant-config/{tenant_id}", "auth": "tenant_config_manage",
+        "request_body": {"modules_enabled": ["string (min 1, solo módulos válidos)"]},
+        "errores": {"400": "Módulo no válido: <nombre>"},
+        "frontend_notes": ["Módulos disponibles: products, shelves, categories, sales, orders, stations, cash_register, taxes, customers, payments"]
       }
     },
 
@@ -1374,9 +1429,9 @@
       "open": {
         "method": "POST", "path": "/stations/{id}/open", "auth": "stations_manage",
         "request_body": {"customer_name": "string (default 'Cliente mostrador')", "customer_email": "string|null", "customer_phone": "string|null", "customer_document": "string|null", "customer_address": "string|null"},
-        "response_shape": "StationSessionResponse {id, station_id, customer_id|null, customer_name, total, status: 'OPEN', sale_id|null, created_by, opened_at, closed_at|null, items: []}",
+        "response_shape": "StationSessionResponse {id, station_id, customer_id|null, customer_name, total, status: 'OPEN', sale_id|null, cash_register_id:int|null, created_by, opened_at, closed_at|null, items: []}",
         "errores": {"409": "Estación ya tiene sesión abierta o está en mantenimiento"},
-        "frontend_notes": ["Abre sesión y cambia station.status a OCCUPIED automáticamente."]
+        "frontend_notes": ["Abre sesión y cambia station.status a OCCUPIED automáticamente.", "Si módulo caja habilitado, guarda cash_register_id del usuario que abre la sesión."]
       },
 
       "close": {
@@ -1427,6 +1482,11 @@
     },
 
     "flujo_frontend_pos": {
+      "flujo_apertura_caja": [
+        "0. Cajero: POST /cash-register/open {name: 'Caja 1', opening_amount: 5000} → caja OPEN",
+        "1. Todas las ventas/órdenes/estaciones siguientes se atan automáticamente a esta caja",
+        "2. Al final del turno: POST /cash-register/close → expected_cash + discrepancy"
+      ],
       "flujo_mesa_restaurante": [
         "1. Mesero: POST /stations/MESA-01/open (abre mesa)",
         "2. Escanea/busca producto: GET /products/by-barcode/7791234567890 → {id, name, price, taxes, stock, image_url}",
@@ -1474,7 +1534,8 @@
       "3. Muestras volumen ocupado vs capacidad: current_volume / shelf_volume",
       "4. Lista de items cliqueables → navegan a GET /products/{product_id}"
     ]
-  },
+  }
+},
 
   "permisos_frontend": {
     "_como_usar": "Decodificar JWT en frontend. El endpoint GET /auth/me devuelve la lista de permisos del usuario.",
@@ -1511,12 +1572,16 @@
       "stations_read": "mostrar sección Estaciones",
       "stations_manage": "mostrar botones CRUD estaciones, abrir/cerrar, agregar items",
       "cash_register_read": "mostrar estado de caja",
-      "cash_register_manage": "mostrar botones Abrir/Cerrar Caja"
+      "cash_register_manage": "mostrar botones Abrir/Cerrar Caja",
+      "api_keys_read": "mostrar lista de API Keys",
+      "api_keys_manage": "mostrar botones CRUD API Keys",
+      "tenant_config_read": "mostrar config de módulos del tenant",
+      "tenant_config_manage": "mostrar toggle de módulos habilitados"
     },
     "roles_default": {
-      "Admin": "todos los permisos excepto tenants_manage (solo platform admin)",
-      "Operator": "products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage",
-      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read"
+      "Admin": "products_create/read/update/delete, events_read, roles_manage, users_manage, shelves_create/read/update/delete, categories_create/read/update/delete, sales_create/read/cancel, orders_create/read/manage, taxes_read/manage, customers_read/manage, payments_read/manage, stations_read/manage, cash_register_read/manage, api_keys_read/manage, tenant_config_read/manage",
+      "Operator": "products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage, api_keys_read, tenant_config_read",
+      "Viewer": "products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read, api_keys_read, tenant_config_read"
     }
   }
 }

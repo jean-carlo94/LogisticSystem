@@ -39,6 +39,10 @@ class Order(Base):
     created_by: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, index=True
     )
+    cash_register_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("cash_register_sessions.id", ondelete="SET NULL"),
+        default=None, index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

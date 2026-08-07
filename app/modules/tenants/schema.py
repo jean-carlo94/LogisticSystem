@@ -8,12 +8,14 @@ from app.core.storage import get_image_url
 class TenantCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
+    business_id: str | None = Field(default=None, max_length=50)
     admin_email: str | None = Field(default=None, max_length=255)
     admin_password: str | None = Field(default=None, min_length=6)
 
 
 class TenantUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    business_id: str | None = Field(default=None, max_length=50)
     is_active: bool | None = None
 
 
@@ -21,6 +23,7 @@ class TenantResponse(BaseModel):
     id: int
     name: str
     slug: str
+    business_id: str | None = None
     is_active: bool
     logo_path: str | None = None
     created_at: datetime

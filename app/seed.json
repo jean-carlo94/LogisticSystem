@@ -31,11 +31,17 @@
     "stations_read": "Ver estaciones",
     "stations_manage": "Gestionar estaciones",
     "cash_register_read": "Ver caja",
-    "cash_register_manage": "Abrir/cerrar caja"
+    "cash_register_manage": "Abrir/cerrar caja",
+    "api_keys_read": "Ver API Keys",
+    "api_keys_manage": "Gestionar API Keys",
+    "tenant_config_read": "Ver config de tenant",
+    "tenant_config_manage": "Gestionar config de tenant",
+    "invoice_templates_read": "Ver plantilla de factura",
+    "invoice_templates_manage": "Editar plantilla de factura"
   },
   "roles": {
-    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage", "shelves_create", "shelves_read", "shelves_update", "shelves_delete", "categories_create", "categories_read", "categories_update", "categories_delete", "sales_create", "sales_read", "sales_cancel", "orders_create", "orders_read", "orders_manage", "taxes_read", "taxes_manage", "customers_read", "customers_manage", "payments_read", "payments_manage", "stations_read", "stations_manage", "cash_register_read", "cash_register_manage"],
-    "Operator": ["products_create", "products_read", "products_update", "shelves_read", "shelves_update", "categories_read", "sales_create", "sales_read", "sales_cancel", "orders_create", "orders_read", "orders_manage", "taxes_read", "customers_read", "payments_read", "payments_manage", "stations_read", "stations_manage", "cash_register_read", "cash_register_manage"],
-    "Viewer": ["products_read", "shelves_read", "categories_read", "sales_read", "orders_read", "events_read", "taxes_read", "customers_read", "payments_read", "stations_read", "cash_register_read"]
+    "Admin": ["products_create", "products_read", "products_update", "products_delete", "events_read", "roles_manage", "users_manage", "shelves_create", "shelves_read", "shelves_update", "shelves_delete", "categories_create", "categories_read", "categories_update", "categories_delete", "sales_create", "sales_read", "sales_cancel", "orders_create", "orders_read", "orders_manage", "taxes_read", "taxes_manage", "customers_read", "customers_manage", "payments_read", "payments_manage", "stations_read", "stations_manage", "cash_register_read", "cash_register_manage", "api_keys_read", "api_keys_manage", "tenant_config_read", "tenant_config_manage", "invoice_templates_read", "invoice_templates_manage"],
+    "Operator": ["products_create", "products_read", "products_update", "shelves_read", "shelves_update", "categories_read", "sales_create", "sales_read", "sales_cancel", "orders_create", "orders_read", "orders_manage", "taxes_read", "customers_read", "payments_read", "payments_manage", "stations_read", "stations_manage", "cash_register_read", "cash_register_manage", "api_keys_read", "tenant_config_read", "invoice_templates_read"],
+    "Viewer": ["products_read", "shelves_read", "categories_read", "sales_read", "orders_read", "events_read", "taxes_read", "customers_read", "payments_read", "stations_read", "cash_register_read", "api_keys_read", "tenant_config_read", "invoice_templates_read"]
   }
 }

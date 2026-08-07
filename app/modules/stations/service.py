@@ -79,7 +79,14 @@ class StationService:
             )
 
         return StationDetailResponse(
-            **station.__dict__,
+            id=station.id,
+            code=station.code,
+            name=station.name,
+            area=station.area,
+            capacity=station.capacity,
+            status=station.status.value,
+            created_at=station.created_at,
+            updated_at=station.updated_at,
             active_session=session_response,
         )
 
@@ -126,7 +133,8 @@ class StationService:
         await self.station_repo.delete(station)
 
     async def open_session(
-        self, station_id: int, data: SessionOpenRequest, user_id: int
+        self, station_id: int, data: SessionOpenRequest, user_id: int,
+        cash_register_id: int | None = None,
     ) -> StationSessionResponse:
         station = await self.station_repo.get_by_id(station_id)
         if not station:
@@ -153,6 +161,7 @@ class StationService:
             customer_document=data.customer_document,
             customer_address=data.customer_address,
             created_by=user_id,
+            cash_register_id=cash_register_id,
         )
 
         await self.station_repo.update(station, status=StationStatus.OCCUPIED)
@@ -190,7 +199,9 @@ class StationService:
             )
 
             prev_tenant = current_tenant_id.get()
-            sale_detail = await self.sale_service.create(sale_data, user_id)
+            sale_detail = await self.sale_service.create(
+                sale_data, user_id, session.cash_register_id
+            )
             current_tenant_id.set(prev_tenant)
 
             total = sum(it.subtotal for it in chargeable)
@@ -414,6 +425,7 @@ class StationService:
             total=session.total,
             status=session.status.value,
             sale_id=session.sale_id,
+            cash_register_id=session.cash_register_id,
             created_by=session.created_by,
             opened_at=session.opened_at,
             closed_at=session.closed_at,

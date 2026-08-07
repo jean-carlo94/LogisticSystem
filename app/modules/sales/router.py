@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, status
 
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
-from app.core.security import require_permission
+from app.core.security import require_cash_register, require_permission
 from app.modules.sales.deps import get_sale_service
 from app.modules.sales.schema import SaleCreate, SaleDetailResponse, SaleResponse, SaleCancelResponse, ReceiptResponse
 from app.modules.sales.service import SaleService
@@ -36,8 +36,9 @@ async def create_sale(
     data: SaleCreate,
     service: SaleService = Depends(get_sale_service),
     user: "User" = Depends(require_permission(PermissionCode.SALES_CREATE)),
+    cash_register_id: int | None = Depends(require_cash_register),
 ):
-    return await service.create(data, user.id)
+    return await service.create(data, user.id, cash_register_id)
 
 
 @router.get("/{sale_id}", response_model=SaleDetailResponse)

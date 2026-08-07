@@ -44,6 +44,7 @@ class OrderResponse(BaseModel):
     total: float
     status: OrderStatus
     notes: str | None = None
+    cash_register_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

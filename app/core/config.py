@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     ADMIN_EMAIL: str = ""
     ADMIN_PASSWORD: str = ""
+    PDF_RENDERER: str = "weasyprint"
+    PDF_SERVICE_URL: str = ""
+    PDF_CONCURRENCY_LIMIT: int = 5
 
 
 @lru_cache()

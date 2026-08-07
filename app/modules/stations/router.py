@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.pagination import FilterParams, PaginatedResponse, PaginationParams
-from app.core.security import require_permission
+from app.core.security import require_cash_register, require_permission
 from app.modules.stations.deps import get_station_service
 from app.modules.stations.schema import (
     StationCreate, StationUpdate, StationResponse, StationDetailResponse,
@@ -86,8 +86,9 @@ async def open_session(
     data: SessionOpenRequest = SessionOpenRequest(),
     service: StationService = Depends(get_station_service),
     user: "User" = Depends(require_permission(PermissionCode.STATIONS_MANAGE)),
+    cash_register_id: int | None = Depends(require_cash_register),
 ):
-    return await service.open_session(station_id, data, user.id)
+    return await service.open_session(station_id, data, user.id, cash_register_id)
 
 
 @router.post("/{station_id}/close", response_model=StationSessionResponse)

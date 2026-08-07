@@ -51,7 +51,7 @@ class OrderService:
     async def get_by_id(self, order_id: int) -> OrderDetailResponse:
         return await self._build_detail(order_id)
 
-    async def create(self, data: OrderCreate, user_id: int) -> OrderDetailResponse:
+    async def create(self, data: OrderCreate, user_id: int, cash_register_id: int | None = None) -> OrderDetailResponse:
         if not data.items:
             raise ValidationException("El pedido debe tener al menos un producto")
         if current_tenant_id.get() is None:
@@ -108,6 +108,7 @@ class OrderService:
             status=OrderStatus.CREATED,
             notes=data.notes,
             created_by=user_id,
+            cash_register_id=cash_register_id,
         )
 
         for item_in in data.items:
@@ -147,7 +148,7 @@ class OrderService:
 
         return await self._build_detail(order.id)
 
-    async def deliver(self, order_id: int, user_id: int) -> OrderDetailResponse:
+    async def deliver(self, order_id: int, user_id: int, cash_register_id: int | None = None) -> OrderDetailResponse:
         order = await self.order_repo.get_by_id(order_id)
         if not order:
             raise NotFoundException("Pedido no encontrado")
@@ -182,7 +183,7 @@ class OrderService:
 
         prev_tenant = current_tenant_id.get()
         current_tenant_id.set(order.tenant_id)
-        await self.sale_service.create(sale_data, user_id)
+        await self.sale_service.create(sale_data, user_id, order.cash_register_id)
         current_tenant_id.set(prev_tenant)
 
         previous_status = order.status

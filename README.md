@@ -57,8 +57,10 @@ app/
     ├── sales/                # Crear ventas + cancelación + recibo + descuento de stock producto + estantería
     ├── orders/               # Pedidos con state machine (CREATED→PREPARING→READY→DELIVERED) + entrega crea venta
     ├── payments/             # Registro de pagos (cash/card/transfer/wallet) + split payments
-    ├── cash_register/        # Caja registradora: open/close, conteo, desfase
-    └── stations/             # Puntos de servicio genéricos: mesas/bar/hotel/delivery/mostrador
+    ├── cash_register/        # Caja registradora: open/close, conteo, desfase, N cajas simultáneas
+    ├── stations/             # Puntos de servicio genéricos: mesas/bar/hotel/delivery/mostrador
+    ├── tenant_config/        # Config de módulos habilitados por tenant
+    └── api_keys/             # API Keys para integraciones externas
 ```
 
 ## Multitenant
@@ -67,19 +69,22 @@ Schema compartido (misma DB). Cada tenant es una empresa independiente. Aislamie
 
 | Concepto | Detalle |
 |----------|---------|
-| **Tablas con `tenant_id`** | users (nullable), products, categories, shelves, sales, orders, events (nullable), roles |
+| **Tablas con `tenant_id`** | users (nullable), products, categories, shelves, sales, orders, events (nullable), roles, tenant_configs (UNIQUE), api_keys |
 | **Sin `tenant_id`** | shelf_items, sale_items, order_items, product_categories, role_permissions, user_roles (scoped via FK padre), permissions (global) |
 | **Unique constraints** | Compuestos `(tenant_id, campo)` para barcode, shelf code, category name, role name |
 | **Platform admin** | `is_super_admin=True`, `tenant_id=NULL`. Sin `X-Tenant` header → ve todo. Con `X-Tenant: <slug>` → switchea a ese tenant |
 | **Tenant user** | `tenant_id=X`. JWT incluye `tid`. Scoping automático, no necesita header |
 | **Tenant context** | `current_tenant_id: ContextVar` → `BaseRepository` lo lee lazy → `Base.get_all/get_id` filtran WHERE |
+| **Tenant disable** | `get_current_user` y `resolve_tenant` verifican `Tenant.is_active`. Si `false` → 403 "Este tenant está deshabilitado". Aplica a JWT, API Keys y X-Tenant. |
+| **ID fiscal** | `Tenant.business_id` (String 50, nullable) acepta NIT/RUT/ID con caracteres especiales |
 
 ### Crear tenant
 
 `POST /tenants` (solo platform admin):
-1. Crea registro en `tenants`
+1. Crea registro en `tenants` (name, slug, business_id opcional)
 2. `seed_tenant_roles()` crea roles Admin/Operator/Viewer para ese tenant
 3. Si se envían `admin_email` + `admin_password` → crea usuario admin con `tenant_id` y rol Admin
+4. `_ensure_tenant_config()` crea TenantConfig con todos los módulos habilitados
 
 ## Instalación
 
@@ -223,10 +228,12 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
-| `GET` | `/api/v1/cash-register/` | `cash_register_read` | Estado actual de caja |
-| `POST` | `/api/v1/cash-register/open` | `cash_register_manage` | Abrir caja con monto inicial |
-| `POST` | `/api/v1/cash-register/close` | `cash_register_manage` | Cerrar caja (conteo + desfase) |
-| `GET` | `/api/v1/cash-register/history` | `cash_register_read` | Historial de sesiones |
+| `GET` | `/api/v1/cash-register/` | `cash_register_read` | Caja abierta del usuario actual (1 por usuario, N simultáneas) |
+| `POST` | `/api/v1/cash-register/open` | `cash_register_manage` | Abrir caja con nombre + monto inicial |
+| `POST` | `/api/v1/cash-register/close` | `cash_register_manage` | Cerrar caja del usuario (conteo + desfase) |
+| `GET` | `/api/v1/cash-register/history` | `cash_register_read` | Historial de sesiones de caja |
+
+**Regla de negocio**: si el módulo `cash_register` está habilitado en `TenantConfig`, todas las ventas, órdenes y sesiones de estación deben estar atadas a una caja abierta (`cash_register_id`). Si el módulo está deshabilitado, no hay restricción y los FKs quedan null.
 
 ### Estaciones (mesas/bar/hotel/delivery)
 
@@ -248,6 +255,27 @@ Documentación: [Swagger](http://localhost:8000/docs) · [ReDoc](http://localhos
 | `POST` | `/api/v1/stations/{id}/items/{item_id}/ready` | `stations_manage` | PREPARING→READY |
 | `POST` | `/api/v1/stations/{id}/items/{item_id}/deliver` | `stations_manage` | READY→DELIVERED |
 | `POST` | `/api/v1/stations/{id}/transfer/{target}` | `stations_manage` | Mover sesión a otra estación |
+
+### API Keys
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/v1/api-keys/` | `api_keys_read` | Listar API Keys del tenant (paginado + filtros) |
+| `POST` | `/api/v1/api-keys/` | `api_keys_manage` | Crear API Key (retorna raw_key una sola vez) |
+| `GET` | `/api/v1/api-keys/{id}` | `api_keys_read` | Ver API Key |
+| `PUT` | `/api/v1/api-keys/{id}` | `api_keys_manage` | Editar nombre/permisos/activo |
+| `DELETE` | `/api/v1/api-keys/{id}` | `api_keys_manage` | Eliminar API Key |
+
+**Autenticación**: header `X-Api-Key: <raw_key>` como alternativa a `Authorization: Bearer <JWT>`. Las API Keys tienen permisos propios (subconjunto de PermissionCode). Se hashean con SHA-256.
+
+### Tenant Config
+
+| Método | Ruta | Permiso | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/v1/tenant-config/{tenant_id}` | `tenant_config_read` | Ver módulos habilitados del tenant |
+| `PUT` | `/api/v1/tenant-config/{tenant_id}` | `tenant_config_manage` | Actualizar módulos habilitados |
+
+Módulos disponibles: `products`, `shelves`, `categories`, `sales`, `orders`, `stations`, `cash_register`, `taxes`, `customers`, `payments`.
 
 ### Eventos (auditoría)
 
@@ -317,7 +345,7 @@ Campos bloqueados: `hashed_password` en users (ignorado por seguridad), `tenant_
 **Tablas:** `permissions` (global), `roles` (por tenant), `role_permissions` (n-m), `user_roles` (n-m).
 
 **Permisos** definidos en `app/core/permissions.py` (`PermissionCode` enum):
-`products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`, `categories_create`, `categories_read`, `categories_update`, `categories_delete`, `sales_create`, `sales_read`, `sales_cancel`, `orders_create`, `orders_read`, `orders_manage`, `tenants_manage`, `taxes_read`, `taxes_manage`, `customers_read`, `customers_manage`, `payments_read`, `payments_manage`, `stations_read`, `stations_manage`, `cash_register_read`, `cash_register_manage`
+`products_create`, `products_read`, `products_update`, `products_delete`, `events_read`, `roles_manage`, `users_manage`, `shelves_create`, `shelves_read`, `shelves_update`, `shelves_delete`, `categories_create`, `categories_read`, `categories_update`, `categories_delete`, `sales_create`, `sales_read`, `sales_cancel`, `orders_create`, `orders_read`, `orders_manage`, `tenants_manage`, `taxes_read`, `taxes_manage`, `customers_read`, `customers_manage`, `payments_read`, `payments_manage`, `stations_read`, `stations_manage`, `cash_register_read`, `cash_register_manage`, `api_keys_read`, `api_keys_manage`, `tenant_config_read`, `tenant_config_manage`
 
 **Seed** (`app/seed.json`):
 - Permisos globales (idempotente, se crean al primer arranque)
@@ -326,9 +354,9 @@ Campos bloqueados: `hashed_password` en users (ignorado por seguridad), `tenant_
 
 | Rol | Permisos |
 |-----|----------|
-| `Admin` | todos excepto `tenants_manage` |
-| `Operator` | products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage |
-| `Viewer` | products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read |
+| `Admin` | products_create/read/update/delete, events_read, roles_manage, users_manage, shelves_create/read/update/delete, categories_create/read/update/delete, sales_create/read/cancel, orders_create/read/manage, taxes_read/manage, customers_read/manage, payments_read/manage, stations_read/manage, cash_register_read/manage, api_keys_read/manage, tenant_config_read/manage |
+| `Operator` | products_create/read/update, shelves_read/update, categories_read, sales_create/read/cancel, orders_create/read/manage, taxes_read, customers_read, payments_read/manage, stations_read/manage, cash_register_read/manage, api_keys_read, tenant_config_read |
+| `Viewer` | products_read, shelves_read, categories_read, sales_read, orders_read, events_read, taxes_read, customers_read, payments_read, stations_read, cash_register_read, api_keys_read, tenant_config_read |
 
 **`require_permission(code)`** (`app/core/security.py`):
 - `is_super_admin=True` → bypass total
@@ -375,6 +403,7 @@ await self.audit.log_delete("Product", product.id, user_id, product)
 - JWT incluye `tid` para usuarios con tenant
 - `current_tenant_id` se lee lazy en cada método (no en `__init__` del repo)
 - `tenant_id` se excluye de filtros de query params
+- **Tenant disable**: `get_current_user` y `resolve_tenant` chequean `Tenant.is_active`. Si deshabilitado → 403 "Este tenant está deshabilitado"
 
 ## Almacenamiento de imágenes
 
@@ -471,6 +500,7 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `payment_status` | str | PENDING\|PAID\|PARTIALLY_PAID\|REFUNDED |
 | `notes` | str\|null | |
 | `created_by` | int | FK users |
+| `cash_register_id` | int\|null | FK cash_register_sessions (si módulo caja habilitado) |
 
 ### Order
 
@@ -483,6 +513,7 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `status` | enum | CREATED→PREPARING→READY→DELIVERED |
 | `notes` | str\|null | |
 | `created_by` | int | FK users |
+| `cash_register_id` | int\|null | FK cash_register_sessions (si módulo caja habilitado) |
 
 ### Event
 
@@ -513,7 +544,8 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 |-------|------|-------|
 | `id` | int | PK |
 | `tenant_id` | int | FK tenants |
-| `user_id` | int | FK users (cajero) |
+| `user_id` | int | FK users (cajero). 1 caja abierta por usuario |
+| `name` | str(100)\|null | Nombre descriptivo, default "Caja principal" |
 | `opening_amount` | float | monto inicial |
 | `closing_amount` | float\|null | monto contado al cierre |
 | `expected_cash` | float\|null | opening + Σ cash payments |
@@ -542,7 +574,8 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `customer_name` | str(200) | denormalizado |
 | `total` | float | calculado al close |
 | `status` | enum | OPEN\|CLOSED\|CANCELLED |
-| `sale_id` | int\|null | FK sales |
+| `sale_id` | int\|null | FK sales (seteado al close) |
+| `cash_register_id` | int\|null | FK cash_register_sessions (seteado al open) |
 | `created_by` | int | FK users |
 
 ### StationSessionItem
@@ -565,7 +598,38 @@ State machine: stock=0 → NO_STOCK, stock>0 + NO_STOCK → ACTIVE.
 | `id` | int | PK |
 | `name` | str(200) | nombre empresa |
 | `slug` | str(100) | único, URL-safe (regex `^[a-z0-9-]+$`) |
+| `business_id` | str(50)\|null | NIT/RUT/identificador fiscal |
 | `is_active` | bool | default true |
+| `logo_path` | str(500)\|null | |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
+
+### TenantConfig
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `tenant_id` | int | FK tenants, UNIQUE |
+| `modules_enabled` | JSON (str[]) | Módulos habilitados. Default todos |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
+
+### ApiKey
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | int | PK |
+| `tenant_id` | int | FK tenants |
+| `name` | str(200) | Nombre descriptivo |
+| `key_prefix` | str(12) | Primeros 12 chars de la key (display) |
+| `key_hash` | str(255) | SHA-256 de la key (nunca se expone) |
+| `permissions` | JSON (str[]) | Lista de PermissionCode |
+| `is_active` | bool | default true |
+| `expires_at` | datetime\|null | Fecha de expiración |
+| `last_used_at` | datetime\|null | Último uso |
+| `created_by` | int | FK users |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
 
 ## Variables de entorno
 

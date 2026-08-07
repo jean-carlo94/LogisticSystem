@@ -22,9 +22,9 @@ router = APIRouter(prefix="/cash-register", tags=["cash_register"])
 @router.get("/", response_model=CashRegisterResponse | None)
 async def get_current_register(
     service: CashRegisterService = Depends(get_cash_register_service),
-    _perm: "User" = Depends(require_permission(PermissionCode.CASH_REGISTER_READ)),
+    user: "User" = Depends(require_permission(PermissionCode.CASH_REGISTER_READ)),
 ):
-    return await service.get_current()
+    return await service.get_current(user.id)
 
 
 @router.post(

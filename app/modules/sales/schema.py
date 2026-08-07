@@ -44,6 +44,7 @@ class SaleResponse(BaseModel):
     status: str
     payment_status: str = "PENDING"
     notes: str | None = None
+    cash_register_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
