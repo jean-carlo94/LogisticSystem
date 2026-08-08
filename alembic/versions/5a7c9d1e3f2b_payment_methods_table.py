@@ -51,7 +51,7 @@ def upgrade() -> None:
         "UPDATE payments p SET payment_method_id = pm.id "
         "FROM payment_methods pm "
         "JOIN sales s ON s.tenant_id = pm.tenant_id "
-        "WHERE p.sale_id = s.id AND p.method = pm.name"
+        "WHERE p.sale_id = s.id AND p.method::text = pm.name"
     ))
 
     op.alter_column('payments', 'payment_method_id', nullable=False)
