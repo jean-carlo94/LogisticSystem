@@ -7,6 +7,9 @@ from app.modules.cash_register.model import CashRegister, CashRegisterSession, C
 class CashRegisterRepository(BaseRepository):
     model = CashRegisterSession
 
+    async def get_register_by_id(self, register_id: int) -> CashRegister | None:
+        return await self.db.get(CashRegister, register_id)
+
     async def get_current(self, tenant_id: int, user_id: int) -> CashRegisterSession | None:
         result = await self.db.scalar(
             select(CashRegisterSession).where(

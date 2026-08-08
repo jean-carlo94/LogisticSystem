@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
@@ -24,13 +24,8 @@ class CashRegisterService:
             self._register_names = cache
         rid = session.cash_register_id
         if rid not in self._register_names:
-            register = await self.repo.db.get(
-                type("X", (), {"__tablename__": "cash_registers"}),
-                rid,
-                populate_existing=True,
-            )
-            # ponytail: simple db.get, not worth a repo method for one lookup
-            pass
+            register = await self.repo.get_register_by_id(rid)
+            self._register_names[rid] = register.name if register else None
         return {
             "id": session.id,
             "tenant_id": session.tenant_id,
@@ -58,8 +53,7 @@ class CashRegisterService:
             tid, session.opened_at
         )
         expected = round(session.opening_amount + total_cash, 2)
-        from app.modules.cash_register.model import CashRegister
-        register = await self.repo.db.get(CashRegister, session.cash_register_id)
+        register = await self.repo.get_register_by_id(session.cash_register_id)
         return {
             "id": session.id,
             "tenant_id": session.tenant_id,
@@ -86,13 +80,11 @@ class CashRegisterService:
         return PaginatedResponse.of(list(items), total, page, size)
 
     async def open(self, data: CashRegisterOpenRequest, user_id: int):
-        from app.modules.cash_register.model import CashRegister
-
         tid = current_tenant_id.get()
         if tid is None:
             raise ValidationException("Debe especificar un tenant (use header X-Tenant)")
 
-        register = await self.repo.db.get(CashRegister, data.cash_register_id)
+        register = await self.repo.get_register_by_id(data.cash_register_id)
         if not register or register.tenant_id != tid:
             raise NotFoundException("Caja registradora no encontrada")
         if not register.is_active:
@@ -154,7 +146,7 @@ class CashRegisterService:
             discrepancy=discrepancy,
             notes=data.notes,
             status=CashRegisterStatus.CLOSED,
-            closed_at=datetime.utcnow(),
+            closed_at=datetime.now(timezone.utc),
         )
 
         await self.audit.log_update(
@@ -163,8 +155,7 @@ class CashRegisterService:
              "expected_cash": expected, "discrepancy": discrepancy},
         )
 
-        from app.modules.cash_register.model import CashRegister
-        register = await self.repo.db.get(CashRegister, session.cash_register_id)
+        register = await self.repo.get_register_by_id(session.cash_register_id)
         return {
             "id": session.id,
             "tenant_id": session.tenant_id,

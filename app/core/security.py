@@ -78,7 +78,7 @@ async def get_current_user(
         key = await db.scalar(select(ApiKey).where(ApiKey.key_hash == key_hash))
         if not key or not key.is_active:
             raise UnauthorizedException("API Key invalida o inactiva")
-        if key.expires_at and key.expires_at < datetime.utcnow():
+        if key.expires_at and key.expires_at < datetime.now(timezone.utc):
             raise UnauthorizedException("API Key expirada")
         from app.modules.tenants.model import Tenant
         tenant = await db.get(Tenant, key.tenant_id)
@@ -86,7 +86,7 @@ async def get_current_user(
             raise ForbiddenException("Este tenant está deshabilitado")
         current_tenant_id.set(key.tenant_id)
         await db.execute(
-            update(ApiKey).where(ApiKey.id == key.id).values(last_used_at=datetime.utcnow())
+            update(ApiKey).where(ApiKey.id == key.id).values(last_used_at=datetime.now(timezone.utc))
         )
         await db.commit()
         synthetic_user = User(
@@ -168,14 +168,14 @@ async def get_current_api_key(
     if not key or not key.is_active:
         raise UnauthorizedException("API Key invalida o inactiva")
 
-    if key.expires_at and key.expires_at < datetime.utcnow():
+    if key.expires_at and key.expires_at < datetime.now(timezone.utc):
         raise UnauthorizedException("API Key expirada")
 
     current_tenant_id.set(key.tenant_id)
 
     from sqlalchemy import update
     await db.execute(
-        update(ApiKey).where(ApiKey.id == key.id).values(last_used_at=datetime.utcnow())
+        update(ApiKey).where(ApiKey.id == key.id).values(last_used_at=datetime.now(timezone.utc))
     )
     await db.commit()
 

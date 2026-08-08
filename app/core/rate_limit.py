@@ -33,14 +33,16 @@ class RateLimiter:
         if client not in self._clients:
             self._clients[client] = []
         self._clients[client].append(time.time())
-        # Periodic cleanup: drop stale clients
-        if len(self._clients) > 10000:
+        if len(self._clients) > 50_000:
             now = time.time()
-            self._clients = {
-                k: [t for t in v if t > now - self.window]
-                for k, v in self._clients.items()
-                if v
-            }
+            cutoff = now - self.window
+            stale = [k for k, v in self._clients.items() if not v]
+            for k in stale:
+                del self._clients[k]
+            for k in list(self._clients):
+                self._clients[k] = [t for t in self._clients[k] if t > cutoff]
+                if not self._clients[k]:
+                    del self._clients[k]
 
 
 _rate_limiter = RateLimiter(settings.RATE_LIMIT_REQUESTS, settings.RATE_LIMIT_WINDOW)

@@ -14,7 +14,15 @@ class ApiKey(Base):
     tenant_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True,
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    name: Mapped[str] = mapped_column("name", String(200), nullable=False)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        self._name = value.strip()
     key_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     permissions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)

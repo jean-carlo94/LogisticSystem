@@ -26,8 +26,8 @@ async def seed_defaults():
 
         await db.flush()
 
-        admin_email = settings.ADMIN_EMAIL or "admin@alunatechnologies.com"
-        admin_password = settings.ADMIN_PASSWORD or "admin123"
+        admin_email = settings.ADMIN_EMAIL
+        admin_password = settings.ADMIN_PASSWORD
 
         if admin_email and admin_password:
             admin = await db.scalar(

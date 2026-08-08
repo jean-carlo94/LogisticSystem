@@ -10,6 +10,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 docker compose up --build -d
 docker compose down -v   # (destruye volúmenes, DB fresca)
 
+# Docker dev con hot reload (sin rebuild para cambios de código)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+
 # Docker production (self-contained image, no DB port exposure)
 cp .env.prod.example .env.prod   # editar con valores reales
 docker compose -f docker-compose.prod.yml up --build -d
@@ -210,7 +213,7 @@ if api_key is not None:
 - **Orders shelf optional**: `OrderItem.shelf_id` es nullable. Si se especifica, valida que el producto esté asignado a esa estantería y con stock suficiente. Si no, solo valida producto + stock general. Al entregar, la venta resultante respeta el `shelf_id` (o lo omite) del pedido original.
 - **Events append-only**: GET only. Written via `AuditLogger` inside services. Generic: `entity_type + entity_id + user_id + action`.
 - **Audit logging**: `AuditLogger` (`app/core/audit.py`) serializes Pydantic schemas, SQLAlchemy entities (via `class_mapper`), dicts. Filters `hashed_password`. Injected via `Depends(get_audit_logger)`.
-- **RBAC**: `PermissionCode` enum en `app/core/permissions.py` con convención `{modulo}_{accion}`. Acciones: `view`, `create`, `edit`, `delete` + específicas por módulo (`open_close`, `manage_items`, `change_state`, `assign_roles`, `assign_permissions`, `upload_image`, `set_pin`, `cancel`, `view_invoice`, `assign_products`, `manage_registers`). `require_permission(code)` dependency en routes. `is_super_admin=True` bypasses all checks. API Keys verifican contra `key.permissions`. Seed en `app/seed.json`. 65 permisos totales. Roles predefinidos: Admin, Operator, Viewer, Waiter, Cashier.
+- **RBAC**: `PermissionCode` enum en `app/core/permissions.py` con convención `{modulo}_{accion}`. Acciones: `view`, `create`, `edit`, `delete` + específicas por módulo (`open_close`, `manage_items`, `change_state`, `assign_roles`, `assign_permissions`, `upload_image`, `set_pin`, `cancel`, `view_invoice`, `assign_products`, `manage_registers`). `require_permission(code)` dependency en routes. `is_super_admin=True` bypasses all checks. API Keys verifican contra `key.permissions`. Seed en `app/seed.json`. 69 permisos totales. Roles predefinidos: Admin, Operator, Viewer, Waiter, Cashier.
 - **Transactions**: `get_db` commits on success, rolls back on exception. `Base` methods use `flush` (not commit). Request-scoped atomicity.
 - **Async**: `AsyncSession` + `async def` en todas las capas (router, service, repository, Base).
 - **Pagination**: `PaginationParams = Depends(get_pagination)` for query params. Return type `PaginatedResponse[T]`.
@@ -280,7 +283,7 @@ current_tenant_id: ContextVar[int | None] = ContextVar("current_tenant_id", defa
 
 ### PermissionCode
 
-`PermissionCode` enum en `app/core/permissions.py`. Convención: `{modulo}_{accion}`. 65 permisos en total:
+`PermissionCode` enum en `app/core/permissions.py`. Convención: `{modulo}_{accion}`. 69 permisos en total:
 - **Base**: `view`, `create`, `edit`, `delete`
 - **Especiales**: `upload_image`, `assign_products`, `open_close`, `manage_items`, `change_state`, `cancel`, `view_invoice`, `assign_roles`, `set_pin`, `assign_permissions`, `manage_registers`
 - **Gate de módulo**: si el usuario no tiene NINGÚN permiso de un módulo, el frontend no muestra el módulo.
@@ -487,7 +490,7 @@ class ShelfDetailResponse(ShelfResponse):
 ## Seed + admin default
 
 `app/core/seed.py` crea al primer arranque:
-- Permisos globales desde `seed.json` (idempotente, solo si tabla `permissions` vacía). 65 permisos bajo convención `{modulo}_{accion}`.
+- Permisos globales desde `seed.json` (idempotente, solo si tabla `permissions` vacía). 69 permisos bajo convención `{modulo}_{accion}`.
 - Admin default con `ADMIN_EMAIL`/`ADMIN_PASSWORD` (usa fallback `admin@alunatechnologies.com` / `admin123`). `is_super_admin=True`, sin `tenant_id`.
 - Los roles (Admin/Operator/Viewer) NO se crean globalmente — se crean por tenant via `seed_tenant_roles(tenant_id)` al llamar `POST /tenants`.
 - TenantConfig se crea automáticamente al crear tenant con todos los módulos habilitados. `GET /tenant-config/{id}` también hace lazy-create si no existe.

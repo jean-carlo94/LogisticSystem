@@ -5,7 +5,8 @@ from app.core.exceptions import ConflictException, NotFoundException
 from app.core.pagination import PaginatedResponse
 from app.core.security import hash_password
 from app.core.seed import seed_payment_methods, seed_tenant_roles
-from app.modules.roles.repository import UserRoleRepository
+from app.modules.roles.repository import RoleRepository, UserRoleRepository
+from app.modules.tenant_config.repository import TenantConfigRepository
 from app.modules.users.repository import UserRepository
 from app.modules.tenants.model import Tenant
 from app.modules.tenants.repository import TenantRepository
@@ -13,8 +14,20 @@ from app.modules.tenants.schema import TenantCreate, TenantUpdate
 
 
 class TenantService:
-    def __init__(self, repo: TenantRepository, audit: AuditLogger):
+    def __init__(
+        self,
+        repo: TenantRepository,
+        tenant_config_repo: TenantConfigRepository,
+        user_repo: UserRepository,
+        role_repo: RoleRepository,
+        user_role_repo: UserRoleRepository,
+        audit: AuditLogger,
+    ):
         self.repo = repo
+        self.tenant_config_repo = tenant_config_repo
+        self.user_repo = user_repo
+        self.role_repo = role_repo
+        self.user_role_repo = user_role_repo
         self.audit = audit
 
     async def get_all(
@@ -34,15 +47,14 @@ class TenantService:
 
         await seed_payment_methods(tenant.id, db=self.repo.db)
 
-        await _ensure_tenant_config(self.repo.db, tenant.id)
+        await self.tenant_config_repo.ensure_config(tenant.id)
 
         if data.admin_email and data.admin_password:
-            user_repo = UserRepository(self.repo.db)
-            existing_user = await user_repo.find_by_email(data.admin_email)
+            existing_user = await self.user_repo.find_by_email(data.admin_email)
             if existing_user:
                 raise ConflictException("El email del admin ya está registrado")
 
-            admin_user = await user_repo.create(
+            admin_user = await self.user_repo.create(
                 email=data.admin_email,
                 hashed_password=hash_password(data.admin_password),
                 first_name="Admin",
@@ -50,17 +62,9 @@ class TenantService:
                 tenant_id=tenant.id,
             )
 
-            from sqlalchemy import select
-            from app.modules.roles.model import Role
-            admin_role = await self.repo.db.scalar(
-                select(Role).where(Role._name == "Admin", Role.tenant_id == tenant.id)
-            )
+            admin_role = await self.role_repo.find_by_name_and_tenant("Admin", tenant.id)
             if admin_role:
-                ur_repo = UserRoleRepository(self.repo.db)
-                from app.modules.roles.model import UserRole
-                ur = UserRole(user_id=admin_user.id, role_id=admin_role.id)
-                ur_repo.db.add(ur)
-                await ur_repo.db.flush()
+                await self.user_role_repo.assign_role(admin_user.id, admin_role.id)
 
         await self.audit.log_create("Tenant", tenant.id, actor_id, tenant)
         return tenant
@@ -90,16 +94,3 @@ class TenantService:
             raise NotFoundException("Tenant no encontrado")
         await self.audit.log_delete("Tenant", tenant.id, actor_id, tenant)
         await self.repo.update(tenant, is_active=False)
-
-
-async def _ensure_tenant_config(db, tenant_id: int) -> None:
-    from sqlalchemy import select
-    from app.modules.tenant_config.model import DEFAULT_MODULES, TenantConfig
-
-    existing = await db.scalar(
-        select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
-    )
-    if not existing:
-        config = TenantConfig(tenant_id=tenant_id, modules_enabled=list(DEFAULT_MODULES))
-        db.add(config)
-        await db.flush()

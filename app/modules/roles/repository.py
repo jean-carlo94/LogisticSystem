@@ -16,6 +16,11 @@ class RoleRepository(BaseRepository):
             stmt = stmt.where(Role.tenant_id == tid)
         return await self.db.scalar(stmt)
 
+    async def find_by_name_and_tenant(self, name: str, tenant_id: int) -> Role | None:
+        return await self.db.scalar(
+            select(Role).where(Role._name == name, Role.tenant_id == tenant_id)
+        )
+
     async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> None:
         await self.db.execute(
             delete(RolePermission).where(
@@ -71,3 +76,27 @@ class UserRoleRepository:
         if user is None:
             return None
         return user.tenant_id
+
+    async def role_exists(self, role_id: int) -> bool:
+        return await self.db.get(Role, role_id) is not None
+
+    async def user_has_role(self, user_id: int, role_id: int) -> bool:
+        existing = await self.db.scalar(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id,
+            )
+        )
+        return existing is not None
+
+    async def assign_role(self, user_id: int, role_id: int) -> None:
+        existing = await self.db.scalar(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id,
+            )
+        )
+        if not existing:
+            ur = UserRole(user_id=user_id, role_id=role_id)
+            self.db.add(ur)
+            await self.db.flush()

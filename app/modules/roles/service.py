@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.core.audit import AuditLogger
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PaginatedResponse
-from app.modules.roles.model import Role, UserRole
+from app.modules.roles.model import Role
 from app.modules.roles.repository import PermissionRepository, RoleRepository, UserRoleRepository
 from app.modules.roles.schema import RoleCreate, RoleUpdate
 
@@ -75,15 +75,6 @@ class RoleService:
         if user_tenant_id is not None and user_tenant_id != role.tenant_id:
             raise ValidationException("Usuario y rol deben pertenecer al mismo tenant")
 
-        from sqlalchemy import select
-        existing = await self.user_role_repo.db.scalar(
-            select(UserRole).where(
-                UserRole.user_id == user_id,
-                UserRole.role_id == role_id,
-            )
-        )
-        if not existing:
-            ur = UserRole(user_id=user_id, role_id=role_id)
-            self.user_role_repo.db.add(ur)
-            await self.user_role_repo.db.flush()
-            await self.audit.log_create("UserRole", ur.id, actor_id, ur)
+        if not await self.user_role_repo.user_has_role(user_id, role_id):
+            await self.user_role_repo.assign_role(user_id, role_id)
+            await self.audit.log_create("UserRole", 0, actor_id, {"user_id": user_id, "role_id": role_id})

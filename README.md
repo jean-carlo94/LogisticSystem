@@ -370,7 +370,7 @@ Campos bloqueados: `hashed_password` en users (ignorado por seguridad), `tenant_
 
 **Tablas:** `permissions` (global), `roles` (por tenant), `role_permissions` (n-m), `user_roles` (n-m).
 
-**Permisos** definidos en `app/core/permissions.py` (`PermissionCode` enum) con convención `{modulo}_{accion}`. 65 permisos. Acciones base: `view`, `create`, `edit`, `delete`. Acciones especiales: `upload_image`, `assign_products`, `open_close`, `manage_items`, `change_state`, `cancel`, `view_invoice`, `assign_roles`, `set_pin`, `assign_permissions`, `manage_registers`.
+**Permisos** definidos en `app/core/permissions.py` (`PermissionCode` enum) con convención `{modulo}_{accion}`. 69 permisos. Acciones base: `view`, `create`, `edit`, `delete`. Acciones especiales: `upload_image`, `assign_products`, `open_close`, `manage_items`, `change_state`, `cancel`, `view_invoice`, `assign_roles`, `set_pin`, `assign_permissions`, `manage_registers`.
 
 **Seed** (`app/seed.json`):
 - Permisos globales (idempotente, se crean al primer arranque)
@@ -379,7 +379,7 @@ Campos bloqueados: `hashed_password` en users (ignorado por seguridad), `tenant_
 
 | Rol | Permisos |
 |-----|----------|
-| `Admin` | todos los 65 permisos |
+| `Admin` | todos los 69 permisos |
 | `Operator` | products_view/create/edit, shelves_view/edit/assign_products, categories_view, sales_view/create/cancel, orders_view/create/edit/change_state, stations_view/open_close/manage_items, cash_register_view/open_close, taxes_view, customers_view/create, payments_view/create, users_view, roles_view, api_keys_view, tenant_config_view, invoice_templates_view |
 | `Viewer` | solo `_view` de todos los módulos |
 | `Waiter` | stations_view/open_close/manage_items, orders_view/create/edit, products_view, customers_view, sales_view |

@@ -19,6 +19,13 @@ PASSWORD = "admin123"
 OPER_PASSWORD = "oper123"
 VIEW_PASSWORD = "view123"
 
+import os
+PLATFORM_EMAIL = os.environ.get("ADMIN_EMAIL", PLATFORM_EMAIL)
+PLATFORM_PASSWORD = os.environ.get("ADMIN_PASSWORD", PLATFORM_PASSWORD)
+PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD", PASSWORD)
+OPER_PASSWORD = os.environ.get("SEED_OPER_PASSWORD", OPER_PASSWORD)
+VIEW_PASSWORD = os.environ.get("SEED_VIEW_PASSWORD", VIEW_PASSWORD)
+
 
 async def api_post(client, path, data, token=None, expected=201):
     headers = {}
@@ -559,9 +566,10 @@ async def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--base-url" and len(sys.argv) > 2:
         BASE_URL = sys.argv[2]
     # Allow env override for platform creds
-    import os
-    PLATFORM_EMAIL = os.environ.get("ADMIN_EMAIL", PLATFORM_EMAIL)
-    PLATFORM_PASSWORD = os.environ.get("ADMIN_PASSWORD", PLATFORM_PASSWORD)
+    import os as _os
+    global PLATFORM_EMAIL, PLATFORM_PASSWORD
+    PLATFORM_EMAIL = _os.environ.get("ADMIN_EMAIL", PLATFORM_EMAIL)
+    PLATFORM_PASSWORD = _os.environ.get("ADMIN_PASSWORD", PLATFORM_PASSWORD)
 
     print(f"Base URL: {BASE_URL}")
     timeout = httpx.Timeout(30.0, connect=10.0)

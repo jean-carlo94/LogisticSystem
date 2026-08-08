@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select, update
 
@@ -121,7 +121,7 @@ class UserRepository(BaseRepository):
         await self.db.flush()
 
     async def find_valid_token(self, token_hash: str) -> PasswordResetToken | None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return await self.db.scalar(
             select(PasswordResetToken).where(
                 PasswordResetToken.token_hash == token_hash,
@@ -151,7 +151,7 @@ class UserRepository(BaseRepository):
         await self.db.flush()
 
     async def find_valid_activation(self, token_hash: str) -> AccountActivation | None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return await self.db.scalar(
             select(AccountActivation).where(
                 AccountActivation.token_hash == token_hash,
